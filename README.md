@@ -1,13 +1,52 @@
+This is a fork from [NanoGPT@Karpathy](https://github.com/karpathy/nanoGPT/)
 
-# nanoGPT
+My goal is two factorize all weight matrices $$W$$ in a KroneckerDecomop manner as $$A$$ x $$B$$.
 
-![nanoGPT](assets/nanogpt.jpg)
+Detailed Tasks:
 
-The simplest, fastest repository for training/finetuning medium-sized GPTs. It is a rewrite of [minGPT](https://github.com/karpathy/minGPT) that prioritizes teeth over education. Still under active development, but currently the file `train.py` reproduces GPT-2 (124M) on OpenWebText, running on a single 8XA100 40GB node in about 4 days of training. The code itself is plain and readable: `train.py` is a ~300-line boilerplate training loop and `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
+* Weight initialization
+	1. locate the checkpoints /  weights
+	2. decompose using the Van Loan Algorithm
+
+* pre-training investigation:
+	1. You most likely need to pre-train the model, not just fine-tune
+	2. What is openwebtext? do the work... 
+
+* Loss 101:
+	1. locate the loss
+	2. make one simple change to one matrix
+	3. see how everything behaves.
+	4. a way to log loss training.
+	5. a working pipeline, so you save time later on (Karpathy probb has this set-up already, he's that kind of guy) 
+
+* Drop in the kronecker decompositions
+	* drop one by one, let the model "get the vibe" of the new weights/architecture.
+	* 
+
+* Is it working:
+	1. Yes? Good, optimize compute now. and utilize the KP rules (A x B)x
+	2. No? you're f'ed, think of a better idea.
+	
+Scary questions:
+* what is to compute kron., libraries usually extend the memory... hence, you're using the same weights/even more.
+
+
+
+
+Important points from original readme:
+
+* The file `train.py` reproduces GPT-2 (124M) on **OpenWebText**, 
+* Running on a single 8XA100 40GB node in about 4 days of training. 
+
+* The code itself is plain and readable: 
+	* `train.py` is a ~300-line boilerplate training loop
+	* `model.py` a ~300-line GPT model definition, which can optionally load the GPT-2 weights from OpenAI. That's it.
+
+
+
 
 ![repro124m](assets/gpt2_124M_loss.png)
 
-Because the code is so simple, it is very easy to hack to your needs, train new models from scratch, or finetune pretrained checkpoints (e.g. biggest one currently available as a starting point would be the GPT-2 1.3B model from OpenAI).
 
 ## install
 
@@ -17,12 +56,11 @@ pip install torch numpy transformers datasets tiktoken wandb tqdm
 
 Dependencies:
 
-- [pytorch](https://pytorch.org) <3
-- [numpy](https://numpy.org/install/) <3
--  `transformers` for huggingface transformers <3 (to load GPT-2 checkpoints)
--  `datasets` for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
--  `tiktoken` for OpenAI's fast BPE code <3
--  `wandb` for optional logging <3
+-  `transformers`  
+	* (to load GPT-2 checkpoints)
+-  `datasets` 
+	* (if you want to download + preprocess OpenWebText)
+-  `tiktoken`  $$\rightarrow$$ fast BPE code <3
 -  `tqdm` for progress bars <3
 
 ## quick start
@@ -55,19 +93,7 @@ And cowards it be strawn to my bed,
 And thrust the gates of my threats,
 Because he that ale away, and hang'd
 An one with him.
-
-DUKE VINCENTIO:
-I thank your eyes against it.
-
-DUKE VINCENTIO:
-Then will answer him to save the malm:
-And what have you tyrannous shall do this?
-
-DUKE VINCENTIO:
-If you have done evils of all disposition
-To end his power, the day of thrust for a common men
-That I leave, to fight with over-liking
-Hasting in a roseman.
+ a roseman.
 ```
 
 lol  `¯\_(ツ)_/¯`. Not bad for a character-level model after 3 minutes of training on a GPU. Better results are quite likely obtainable by instead finetuning a pretrained GPT-2 model on this dataset (see finetuning section later).
