@@ -1,16 +1,20 @@
 This is a fork from [NanoGPT@Karpathy](https://github.com/karpathy/nanoGPT/)
 
-My goal is two factorize all weight matrices $$W$$ in a KroneckerDecomop manner as $$A$$ x $$B$$.
+My goal is two factorize all weight matrices using 2 smaller matrices.
+
+Quick TODO: math rendering in md is different? 
+
 
 Detailed Tasks:
 
 * Weight initialization
-	1. locate the checkpoints /  weights
+	1. locate the checkpoints /  weights [DONE]
 	2. decompose using the Van Loan Algorithm
+	3. store back the weights
 
 * pre-training investigation:
 	1. You most likely need to pre-train the model, not just fine-tune
-	2. What is openwebtext? do the work... 
+	2. Is openWebText feasble? (It should be you got 4 A100 80BG)
 
 * Loss 101:
 	1. locate the loss
@@ -26,9 +30,10 @@ Detailed Tasks:
 * Is it working:
 	1. Yes? Good, optimize compute now. and utilize the KP rules (A x B)x
 	2. No? you're f'ed, think of a better idea.
+
 	
 Scary questions:
-* what is to compute kron., libraries usually extend the memory... hence, you're using the same weights/even more.
+* what if to compute kron., libraries usually extend the memory... hence, you're using the same weights/even more.
 
 
 
