@@ -7,6 +7,7 @@ Quick TODO: math rendering in md is different?
 
 Detailed Tasks:
 
+this is mostly done in the notebook
 * Weight initialization
 	1. locate the checkpoints /  weights [DONE]
 	2. decompose using the Van Loan Algorithm
