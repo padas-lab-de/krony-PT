@@ -1,5 +1,4 @@
 """
-
 Full definition of a GPT Language Model, all of it in this single file.
 
 References:
@@ -141,7 +140,6 @@ class CausalSelfAttention(nn.Module):
         return y
 
 class MLP(nn.Module):
-
     def __init__(self, config):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
@@ -156,19 +154,24 @@ class MLP(nn.Module):
         x = self.dropout(x)
         return x
 
-class KronyBlock(nn.Module):
-
+class KronyMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
-        self.attn = KronyAttention(config)
-        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = MLP(config)
+        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        self.gelu    = nn.GELU()
+        # here should be two matrices instrad on 1.
+        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
+
+        self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        x = x + self.attn(self.ln_1(x))
-        x = x + self.mlp(self.ln_2(x))
+        x = self.c_fc(x)
+        x = self.gelu(x)
+        ## x = F.kron(self.w1@self.w2)
+        x = self.c_proj(x)
+        x = self.dropout(x)
         return x
+
 
 class Block(nn.Module):
 
@@ -182,6 +185,23 @@ class Block(nn.Module):
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
+        return x
+
+class KronyBlock(nn.Module):
+
+    def __init__(self, config):
+        super().__init__()
+        self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
+        self.attn = CausalSelfAttention(config)
+        self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
+        self.mlp = MLP(config)
+
+    def forward(self, x):
+        ln1 = self.ln1(x)
+        attnX = self.attn(ln1)
+        x = x + attnX
+        ln2 = self.ln_2(x)
+        x = x + self.mlp(x) 
         return x
 
 @dataclass
@@ -209,7 +229,9 @@ class GPT(nn.Module):
             h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
+
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
