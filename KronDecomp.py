@@ -80,20 +80,45 @@ def print_params(list_state_dict):
         num_params += n
     print(f"\n Total # params: {num_params:_} \n")
 
+#
+## Kron Decompostion:
+#
+#mlp0_c_fc = state_dict["transformer.h.0.mlp.c_fc.weight"]
+#mlp0_c_proj = state_dict["transformer.h.0.mlp.c_proj.weight"]
+#
+#mlp0_c_fc1, mlp0_c_fc2 = kronecker_decompose(mlp0_c_fc, 1536, 32, k=2)
+#mlp0_c_proj1, mlp0_c_proj2 = kronecker_decompose(mlp0_c_proj, 32, 1536, k=2)
+#
+#checkpoint["model"]["transformer.h.0.mlp0_c_fc1 "] = mlp0_c_fc1
+#checkpoint["model"]["transformer.h.0.mlp0_c_fc2"] = mlp0_c_fc2 
+#checkpoint["model"]["transformer.h.0.mlp0_c_proj1"] = mlp0_c_proj1 
+#checkpoint["model"]["transformer.h.0.mlp0_c_proj2"] = mlp0_c_proj2 
+#
+#
+## saving the model
+#
+#
+#
+#
+#
 
-# Kron Decompostion:
+# Quick testing in ipython:
+"""
 
-mlp0_c_fc = state_dict["transformer.h.0.mlp.c_fc.weight"]
-mlp0_c_proj = state_dict["transformer.h.0.mlp.c_proj.weight"]
+import torch 
+import torch.nn as nn
+from model import GPTConfig, GPT
 
-mlp0_c_fc1, mlp0_c_fc2 = kronecker_decompose(mlp0_c_fc, 1536, 32, k=2)
-mlp0_c_proj1, mlp0_c_proj2 = kronecker_decompose(mlp0_c_proj, 32, 1536, k=2)
+checkpoint = torch.load('out-shakespeare-char/ckpt1.pt')
 
-checkpoint["model"]["transformer.h.0.mlp0_c_fc1 "] = mlp0_c_fc1
-checkpoint["model"]["transformer.h.0.mlp0_c_fc2"] = mlp0_c_fc2 
-checkpoint["model"]["transformer.h.0.mlp0_c_proj1"] = mlp0_c_proj1 
-checkpoint["model"]["transformer.h.0.mlp0_c_proj2"] = mlp0_c_proj2 
+model_args = checkpoint["model_args"]
 
+# create the model
+gptconf = GPTConfig(**model_args)
+model = GPT(gptconf)
 
-# saving the model
+state_dict = checkpoint['model']
 
+model.load_state_dict(state_dict)
+
+"""
