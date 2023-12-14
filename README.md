@@ -28,6 +28,7 @@ TODO:
 ### Ideas:	
 
 * distill KronyBlocks. one by one, and store the checkpoint.
+	* this should be done today, just curious as fuck. how it would act.
 
 * I prefer to drop in decompostion 1 by 1, and each time allow the model to adapt to the new stucture.
 

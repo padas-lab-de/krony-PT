@@ -45,7 +45,7 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
     return u * scale, v * scale
 
 
-device = torch.device("cuda:2")
+device = torch.device("cuda:3")
 
 ## GPU runtime innit:
 x =  torch.randn(500,500, device = device)
@@ -81,114 +81,71 @@ def print_params(list_state_dict):
 
 
 
-"""
 
-import torch 
-import torch.nn as nn
-from model import GPTConfig, GPT, KronyGPT
+## Decomposition, and filling the checkpoint:
 
-checkpoint = torch.load('out-shakespeare-char/ckpt.pt')
-model_args = checkpoint["model_args"]
+print(f"Kron. Decomposition 0")
 
-# create the model
-gptconf = GPTConfig(**model_args)
-model = KronyGPT(gptconf)
+h_mlp_c_fc_1_list, h_mlp_c_fc_2_list = [], []
+h_mlp_c_proj_1_list, h_mlp_c_proj_2_list = [], []
 
-#state_dict = checkpoint['model']
-#model.load_state_dict(state_dict)
-"""
+for i in range(6):
+    c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+    c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
 
+    fc1 = f"transformer.h.{i}.mlp.c_fc_1"
+    fc2 = f"transformer.h.{i}.mlp.c_fc_2"
+    proj1 = f"transformer.h.{i}.mlp.c_proj_1"
+    proj2 = f"transformer.h.{i}.mlp.c_proj_2"
 
-h0_mlp_c_fc_1, h0_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.0.mlp.c_fc.weight"]  , 1536, 32)
-h0_mlp_c_proj_1, h0_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.0.mlp.c_proj.weight"], 32, 1536)
+    # Perform kronecker decomposition and store the values in respective lists
+    h_mlp_c_fc_1, h_mlp_c_fc_2 = kronecker_decompose(checkpoint["model"][c_fc_key], 1536, 32)
+    h_mlp_c_proj_1, h_mlp_c_proj_2 = kronecker_decompose(checkpoint["model"][c_proj_key], 32, 1536)
 
-h1_mlp_c_fc_1, h1_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.1.mlp.c_fc.weight"]  , 1536, 32) 
-h1_mlp_c_proj_1, h1_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.1.mlp.c_proj.weight"], 32, 1536)
+    checkpoint["model"][fc1]   = h_mlp_c_fc_1.squeeze(0) 
+    checkpoint["model"][fc2]   =  h_mlp_c_fc_2.squeeze(0) 
+    checkpoint["model"][proj1] =  h_mlp_c_proj_1.squeeze(0)
+    checkpoint["model"][proj2] =   h_mlp_c_proj_1.squeeze(0)
 
-h2_mlp_c_fc_1, h2_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.2.mlp.c_fc.weight"]  , 1536, 32) 
-h2_mlp_c_proj_1, h2_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.2.mlp.c_proj.weight"], 32, 1536)
-
-h3_mlp_c_fc_1, h3_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.3.mlp.c_fc.weight"]  , 1536, 32) 
-h3_mlp_c_proj_1, h3_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.3.mlp.c_proj.weight"], 32, 1536)
-
-h4_mlp_c_fc_1, h4_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.4.mlp.c_fc.weight"]  , 1536, 32) 
-h4_mlp_c_proj_1, h4_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.4.mlp.c_proj.weight"], 32, 1536)
-
-h5_mlp_c_fc_1, h5_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.5.mlp.c_fc.weight"]  , 1536, 32) 
-h5_mlp_c_proj_1, h5_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.5.mlp.c_proj.weight"], 32, 1536)
-
-checkpoint["model"]["transformer.h.0.mlp.c_fc_1"] =   h0_mlp_c_fc_1.squeeze(0)
-checkpoint["model"]["transformer.h.0.mlp.c_fc_2"] =   h0_mlp_c_fc_2.squeeze(0)
-checkpoint["model"]["transformer.h.0.mlp.c_proj_1"] = h0_mlp_c_proj_1.squeeze(0)
-checkpoint["model"]["transformer.h.0.mlp.c_proj_2"] = h0_mlp_c_proj_2.squeeze(0)
-
-checkpoint["model"]["transformer.h.1.mlp.c_fc_1"] =  h1_mlp_c_fc_1.squeeze(0)
-checkpoint["model"]["transformer.h.1.mlp.c_fc_2"] =  h1_mlp_c_fc_2.squeeze(0)
-checkpoint["model"]["transformer.h.1.mlp.c_proj_1"]= h1_mlp_c_proj_1.squeeze(0)
-checkpoint["model"]["transformer.h.1.mlp.c_proj_2"]= h1_mlp_c_proj_2.squeeze(0)
-          
-checkpoint["model"]["transformer.h.2.mlp.c_fc_1"] =    h2_mlp_c_fc_1.squeeze(0)
-checkpoint["model"]["transformer.h.2.mlp.c_fc_2"] =    h2_mlp_c_fc_2.squeeze(0)
-checkpoint["model"]["transformer.h.2.mlp.c_proj_1"] =  h2_mlp_c_proj_1.squeeze(0)
-checkpoint["model"]["transformer.h.2.mlp.c_proj_2"] =  h2_mlp_c_proj_2.squeeze(0)
-          
-checkpoint["model"]["transformer.h.3.mlp.c_fc_1"] =   h3_mlp_c_fc_1.squeeze(0)
-checkpoint["model"]["transformer.h.3.mlp.c_fc_2"] =   h3_mlp_c_fc_2.squeeze(0)
-checkpoint["model"]["transformer.h.3.mlp.c_proj_1"] =  h3_mlp_c_proj_1.squeeze(0)
-checkpoint["model"]["transformer.h.3.mlp.c_proj_2"] =  h3_mlp_c_proj_2.squeeze(0)
-
-checkpoint["model"]["transformer.h.4.mlp.c_fc_1"] =  h4_mlp_c_fc_1.squeeze(0)
-checkpoint["model"]["transformer.h.4.mlp.c_fc_2"] =  h4_mlp_c_fc_2.squeeze(0)
-checkpoint["model"]["transformer.h.4.mlp.c_proj_1"] = h4_mlp_c_proj_1.squeeze(0)
-checkpoint["model"]["transformer.h.4.mlp.c_proj_2"] = h4_mlp_c_proj_2.squeeze(0)
-
-checkpoint["model"]["transformer.h.5.mlp.c_fc_1"] =   h5_mlp_c_fc_1.squeeze(0)
-checkpoint["model"]["transformer.h.5.mlp.c_fc_2"] =   h5_mlp_c_fc_2.squeeze(0)
-checkpoint["model"]["transformer.h.5.mlp.c_proj_1"] =  h5_mlp_c_proj_1.squeeze(0)
-checkpoint["model"]["transformer.h.5.mlp.c_proj_2"] =  h5_mlp_c_proj_2.squeeze(0)
-
-"""
-w0 = checkpoint["model"]["transformer.h.0.mlp.c_fc.weight"] 
-w01, wo2  =   kronecker_decompose( w0 , 1536, 32)
-
-w1 = checkpoint["model"]["transformer.h.0.mlp.c_proj.weight"]
-w11, w12  =   kronecker_decompose( w0 , 1536, 32)
-"""
+print(f"Kron. Decomposition 1")
 
 
-# a useful code to detect the old params from checkoint["model"]
 
 
 """
-for i in checkpoint["model"]:
-    if "mlp.c_fc.weight" in i or "mlp.c_proj.weight" in i:
-        # pop it like you mean it!
+## Some useful stuff for when you debug on .ipynb
 
-# one of my most proud one liners
-
-params2 = {i:checkpoint["model"][i] 
-                for i in checkpoint["model"] 
-                    if "mlp.c_fc.weight" not  in i 
-                    and  
-                    "mlp.c_proj.weight" not  in i
-        }        
-
-
-"""
-
-"""
-for a quick demos:
-
-
+from model import GPTConfig, KronyGPT 
 
 args = checkpoint["model_args"]
-conf =  GPTConfig(args)
-model = KronyGPT(cond)
+conf =  GPTConfig(**args)
+model = KronyGPT(conf)
 
+model_state_dict =  model.state_dict() 
+model_params_names = set(model_state_dict)
+
+ckpt_new = {i : model_state_dict[i] 
+            for i in model_state_dict 
+            if ".mlp.c_fc.weight" not in i and ".mlp.c_proj.weight" not in i 
+            }
+
+ckpt2_names = set(ckpt_new.keys())
 
 # number of params:
 print(f"{sum(param2[i].numel() for i in params2):_}")
 
-model.state_dict()
+
+Configuring the new chekckpoint:
+
+chpt2_list = list(checkpoint.keys())
+chpt2_list.remove("model")
+
+checkpoint2 = {}
+for i in chpt2_list:
+    checkpoint2[i] = checkpoint[i]
+
+
+checkpoint2["model"] = ckpt_new
+
 
 """
