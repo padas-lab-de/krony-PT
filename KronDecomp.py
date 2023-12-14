@@ -4,7 +4,7 @@ import torch.nn as nn
 from einops import rearrange
 from typing import Tuple
 
-# this should've been already pre-installed. Update your python.
+# add original link to the implementation.
 
 def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
     """
@@ -45,16 +45,17 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
     return u * scale, v * scale
 
 
-device = torch.device("cuda:3")
+device = torch.device("cuda:2")
 
 ## GPU runtime innit:
 x =  torch.randn(500,500, device = device)
 _ = x@x
+## GPU burned and happy.
 
 print(">>> Loading")
 checkpoint = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
 print(f"checkpoint keys: {[i for i in checkpoint.keys()]}")
-print(">>> Loading \n")
+print(">>> Loading Done\n")
 
 checkpoint_model_args = checkpoint['model_args']
 state_dict = checkpoint["model"] 
@@ -69,8 +70,6 @@ for k,v in list(state_dict.items()):
 
 list_state_dict = list(state_dict.items())
 
-print("\n>>> the weights\n")
-
 
 def print_params(list_state_dict):
     num_params = 0
@@ -80,45 +79,116 @@ def print_params(list_state_dict):
         num_params += n
     print(f"\n Total # params: {num_params:_} \n")
 
-#
-## Kron Decompostion:
-#
-#mlp0_c_fc = state_dict["transformer.h.0.mlp.c_fc.weight"]
-#mlp0_c_proj = state_dict["transformer.h.0.mlp.c_proj.weight"]
-#
-#mlp0_c_fc1, mlp0_c_fc2 = kronecker_decompose(mlp0_c_fc, 1536, 32, k=2)
-#mlp0_c_proj1, mlp0_c_proj2 = kronecker_decompose(mlp0_c_proj, 32, 1536, k=2)
-#
-#checkpoint["model"]["transformer.h.0.mlp0_c_fc1 "] = mlp0_c_fc1
-#checkpoint["model"]["transformer.h.0.mlp0_c_fc2"] = mlp0_c_fc2 
-#checkpoint["model"]["transformer.h.0.mlp0_c_proj1"] = mlp0_c_proj1 
-#checkpoint["model"]["transformer.h.0.mlp0_c_proj2"] = mlp0_c_proj2 
-#
-#
-## saving the model
-#
-#
-#
-#
-#
 
-# Quick testing in ipython:
+
 """
 
 import torch 
 import torch.nn as nn
-from model import GPTConfig, GPT
+from model import GPTConfig, GPT, KronyGPT
 
-checkpoint = torch.load('out-shakespeare-char/ckpt1.pt')
-
+checkpoint = torch.load('out-shakespeare-char/ckpt.pt')
 model_args = checkpoint["model_args"]
 
 # create the model
 gptconf = GPTConfig(**model_args)
-model = GPT(gptconf)
+model = KronyGPT(gptconf)
 
-state_dict = checkpoint['model']
+#state_dict = checkpoint['model']
+#model.load_state_dict(state_dict)
+"""
 
-model.load_state_dict(state_dict)
+
+h0_mlp_c_fc_1, h0_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.0.mlp.c_fc.weight"]  , 1536, 32)
+h0_mlp_c_proj_1, h0_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.0.mlp.c_proj.weight"], 32, 1536)
+
+h1_mlp_c_fc_1, h1_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.1.mlp.c_fc.weight"]  , 1536, 32) 
+h1_mlp_c_proj_1, h1_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.1.mlp.c_proj.weight"], 32, 1536)
+
+h2_mlp_c_fc_1, h2_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.2.mlp.c_fc.weight"]  , 1536, 32) 
+h2_mlp_c_proj_1, h2_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.2.mlp.c_proj.weight"], 32, 1536)
+
+h3_mlp_c_fc_1, h3_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.3.mlp.c_fc.weight"]  , 1536, 32) 
+h3_mlp_c_proj_1, h3_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.3.mlp.c_proj.weight"], 32, 1536)
+
+h4_mlp_c_fc_1, h4_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.4.mlp.c_fc.weight"]  , 1536, 32) 
+h4_mlp_c_proj_1, h4_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.4.mlp.c_proj.weight"], 32, 1536)
+
+h5_mlp_c_fc_1, h5_mlp_c_fc_2  =     kronecker_decompose(checkpoint["model"]["transformer.h.5.mlp.c_fc.weight"]  , 1536, 32) 
+h5_mlp_c_proj_1, h5_mlp_c_proj_2 =  kronecker_decompose(checkpoint["model"]["transformer.h.5.mlp.c_proj.weight"], 32, 1536)
+
+checkpoint["model"]["transformer.h.0.mlp.c_fc_1"] =   h0_mlp_c_fc_1.squeeze(0)
+checkpoint["model"]["transformer.h.0.mlp.c_fc_2"] =   h0_mlp_c_fc_2.squeeze(0)
+checkpoint["model"]["transformer.h.0.mlp.c_proj_1"] = h0_mlp_c_proj_1.squeeze(0)
+checkpoint["model"]["transformer.h.0.mlp.c_proj_2"] = h0_mlp_c_proj_2.squeeze(0)
+
+checkpoint["model"]["transformer.h.1.mlp.c_fc_1"] =  h1_mlp_c_fc_1.squeeze(0)
+checkpoint["model"]["transformer.h.1.mlp.c_fc_2"] =  h1_mlp_c_fc_2.squeeze(0)
+checkpoint["model"]["transformer.h.1.mlp.c_proj_1"]= h1_mlp_c_proj_1.squeeze(0)
+checkpoint["model"]["transformer.h.1.mlp.c_proj_2"]= h1_mlp_c_proj_2.squeeze(0)
+          
+checkpoint["model"]["transformer.h.2.mlp.c_fc_1"] =    h2_mlp_c_fc_1.squeeze(0)
+checkpoint["model"]["transformer.h.2.mlp.c_fc_2"] =    h2_mlp_c_fc_2.squeeze(0)
+checkpoint["model"]["transformer.h.2.mlp.c_proj_1"] =  h2_mlp_c_proj_1.squeeze(0)
+checkpoint["model"]["transformer.h.2.mlp.c_proj_2"] =  h2_mlp_c_proj_2.squeeze(0)
+          
+checkpoint["model"]["transformer.h.3.mlp.c_fc_1"] =   h3_mlp_c_fc_1.squeeze(0)
+checkpoint["model"]["transformer.h.3.mlp.c_fc_2"] =   h3_mlp_c_fc_2.squeeze(0)
+checkpoint["model"]["transformer.h.3.mlp.c_proj_1"] =  h3_mlp_c_proj_1.squeeze(0)
+checkpoint["model"]["transformer.h.3.mlp.c_proj_2"] =  h3_mlp_c_proj_2.squeeze(0)
+
+checkpoint["model"]["transformer.h.4.mlp.c_fc_1"] =  h4_mlp_c_fc_1.squeeze(0)
+checkpoint["model"]["transformer.h.4.mlp.c_fc_2"] =  h4_mlp_c_fc_2.squeeze(0)
+checkpoint["model"]["transformer.h.4.mlp.c_proj_1"] = h4_mlp_c_proj_1.squeeze(0)
+checkpoint["model"]["transformer.h.4.mlp.c_proj_2"] = h4_mlp_c_proj_2.squeeze(0)
+
+checkpoint["model"]["transformer.h.5.mlp.c_fc_1"] =   h5_mlp_c_fc_1.squeeze(0)
+checkpoint["model"]["transformer.h.5.mlp.c_fc_2"] =   h5_mlp_c_fc_2.squeeze(0)
+checkpoint["model"]["transformer.h.5.mlp.c_proj_1"] =  h5_mlp_c_proj_1.squeeze(0)
+checkpoint["model"]["transformer.h.5.mlp.c_proj_2"] =  h5_mlp_c_proj_2.squeeze(0)
+
+"""
+w0 = checkpoint["model"]["transformer.h.0.mlp.c_fc.weight"] 
+w01, wo2  =   kronecker_decompose( w0 , 1536, 32)
+
+w1 = checkpoint["model"]["transformer.h.0.mlp.c_proj.weight"]
+w11, w12  =   kronecker_decompose( w0 , 1536, 32)
+"""
+
+
+# a useful code to detect the old params from checkoint["model"]
+
+
+"""
+for i in checkpoint["model"]:
+    if "mlp.c_fc.weight" in i or "mlp.c_proj.weight" in i:
+        # pop it like you mean it!
+
+# one of my most proud one liners
+
+params2 = {i:checkpoint["model"][i] 
+                for i in checkpoint["model"] 
+                    if "mlp.c_fc.weight" not  in i 
+                    and  
+                    "mlp.c_proj.weight" not  in i
+        }        
+
+
+"""
+
+"""
+for a quick demos:
+
+
+
+args = checkpoint["model_args"]
+conf =  GPTConfig(args)
+model = KronyGPT(cond)
+
+
+# number of params:
+print(f"{sum(param2[i].numel() for i in params2):_}")
+
+model.state_dict()
 
 """
