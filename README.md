@@ -1,38 +1,39 @@
-This is a a detached fork of :goat: [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/)
+This is a a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/) :goat:.
 
 The goal is to factorize single weight matrices into a product of Kronecker Matrices. 
 
-### Detailed Tasks:
+### Progress
 
-1. Find (a not so random) way init. the weights  [DONE]
+
+**TODO:**
+
+* Write code for distilled initialization of KronyMLP
+
+* [URGENT] Code not working so far, try: 
+	* train a seperate KronyBlock / see if backprop is fine.
+	* distill it with random input from Block
+
+
+**DONE**
+* Find (a not so random) way init. the weights  [DONE]
 	* locate the checkpoints /  weights [DONE]
 	* Decompose using the Van Loan Algorithm 
 
-2. Pre-training Investigation: [DONE]
+* Pre-training Investigation: [DONE]
 	* You most likely need to pre-train the model, not just fine-tune
 	* Is openWebText feasble? (It should be you got 4 A100 80BG)
 	* Conclusion: Not really, no need.
 
-3. Write the initial code. [DONE]
-
-
-TODO:
-
-4. Write code for distilled init
----
-* Is it working:
-	1. Yes? Good, optimize compute now. and utilize the KP rules (A x B)x
-	2. No? you're f'ed, think of a better idea.
-
+* Write the initial code. [DONE]
+	* Is it working? NO!
 
 ### Ideas:	
 
 * distill KronyBlocks. one by one, and store the checkpoint.
-	* this should be done today, just curious as fuck. how it would act.
 
-* I prefer to drop in decompostion 1 by 1, and each time allow the model to adapt to the new stucture.
+* prefer to drop in decompostion 1 by 1, i.e., allow the model to adapt to the new stucture.
 
-* The mlp take considerable amount % of the total weights.:
+* The mlp block takes considerable amount % of the total weights.:
 	* decompose them first, make it work.
 	* then do a style of attention. 
 
@@ -44,23 +45,20 @@ TODO:
 	*  1. they are pretty dense.
 	*  2. most use flashattention which is implemented at the cuda level.
 
-* Mixture of Experts as krone decomp.
+* Mixture of Experts as krone decomp? does it make sense?
 
  
-Some details regading this repo:
-
-* The file `train.py` reproduces GPT-2 (124M) on **OpenWebText**, 
-* Running on a single 8XA100 40GB node in about 4 days of training. 
+### Details
 
 * Repo structure now:
 	* `train.py`
 	* `model.py`
-	* my ckeckpoint with kronecker decomposition, is saved in as ckpt2.ptA
+	* my ckeckpoint with kronecker decomposition, is saved in as ckpt2.pt
+* I'm mostly using a single A100 80GB
 
-> Check later:
+### Check later:
 
 * The .pynb for scaling/flops.
 * MoE blog in Hugginface?
 
 
-* Check the scaling reporting (I deleted) that was done with the original repo. 

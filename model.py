@@ -92,9 +92,13 @@ class KronyMLP(nn.Module):
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        x = x@F.kron(self.c_fc_1, self.c_fc_2)
+        kr1 = torch.kron(self.c_fc_1, self.c_fc_2)
+        kr2 = torch.kron(self.c_proj_1, self.c_proj_2)
+        print(">>>>>>>>>>>>>> WTF")
+        print(x.shape, kr1.shape, kr2.shape)
+        x = x@kr1
         x = self.gelu(x)
-        x = x@F.kron(self.w1@self.w2)
+        x = x@kr2
         x = self.dropout(x)
         return x
 
@@ -121,7 +125,7 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
-class KronyGPT(nn.Module):
+class GPT(nn.Module):
 
     def __init__(self, config):
         super().__init__()
@@ -135,9 +139,7 @@ class KronyGPT(nn.Module):
                 wte = nn.Embedding(config.vocab_size, config.n_embd),
                 wpe = nn.Embedding(config.block_size, config.n_embd),
                 drop = nn.Dropout(config.dropout),
-
                 h = nn.ModuleList([KronyBlock(config) for _ in range(config.n_layer)]),
-
                 ln_f = LayerNorm(config.n_embd, bias=config.bias),
             )
         )
@@ -190,9 +192,9 @@ class KronyGPT(nn.Module):
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
+         
+        print("> I want to see mysefl")
 
-        # ben A operating at full scale.
-        x = self.krony1(x)
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -245,7 +247,7 @@ class KronyGPT(nn.Module):
             config_args['dropout'] = override_args['dropout']
         # create a from-scratch initialized minGPT model
         config = GPTConfig(**config_args)
-        model = GPT(config)
+        model = (config)
         sd = model.state_dict()
         sd_keys = sd.keys()
         sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # discard this mask / buffer, not a param
