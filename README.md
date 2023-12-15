@@ -6,16 +6,19 @@ The goal is to factorize single weight matrices into a product of Kronecker Matr
 
 **TODO:**
 
-* Write code for distilled initialization of KronyMLP
-
-* VL decomp are zeros, investigate why.
+* Write code for distilled initialization of KronyMLP [IN-PROGRESS]
 
 * [URGENT] Code not working so far, try: 
 	* Check if backprop is working with torch.kron()
 	* why is the backprop func only a view?
 	* distill it with random input from checkpoint_origin
 
+
 **DONE**
+
+* VL decomp are zeros, investigate why [DONE], 
+	* fixed.
+
 * Find (a not so random) way init. the weights  [DONE]
 	* locate the checkpoints /  weights [DONE]
 	* Decompose using the Van Loan Algorithm 

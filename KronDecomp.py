@@ -4,6 +4,7 @@ import torch.nn as nn
 from einops import rearrange
 from typing import Tuple
 
+from model import GPT, GPTConfig
 # add original link to the implementation.
 
 def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
@@ -53,41 +54,26 @@ _ = x@x
 ## GPU burned and happy.
 
 print(">>> Loading")
-checkpoint = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
-print(f"checkpoint keys: {[i for i in checkpoint.keys()]}")
-print(">>> Loading Done\n")
-
-checkpoint_model_args = checkpoint['model_args']
-state_dict = checkpoint["model"] 
-
-# contains the actual stuff. The real stuff.
+checkpoint_origin = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
 
 unwanted_prefix = '_orig_mod.'
 
+state_dict = checkpoint_origin["model"]
 for k,v in list(state_dict.items()):
     if k.startswith(unwanted_prefix):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 
-list_state_dict = list(state_dict.items())
+#checkpoint_VL =   torch.load('out-shakespeare-char/ckpt_VL.pt', map_location=device)
+print(">>> Done")
 
 
-def print_params(list_state_dict):
-    num_params = 0
-    for (i,j) in list_state_dict:
-        n = torch.numel(j)
-        print(i, n)
-        num_params += n
-    print(f"\n Total # params: {num_params:_} \n")
+#Initial KronP decom. could be obtained as follows:
 
+checkpoint_VL = {i : checkpoint_origin[i] for i in checkpoint_origin if i!= "model"}
+checkpoint_VL["model"] = {}
 
-
-
-## Decomposition, and filling the checkpoint:
 
 print(f"Kron. Decomposition 0")
-
-h_mlp_c_fc_1_list, h_mlp_c_fc_2_list = [], []
-h_mlp_c_proj_1_list, h_mlp_c_proj_2_list = [], []
 
 for i in range(6):
     c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
@@ -99,53 +85,36 @@ for i in range(6):
     proj2 = f"transformer.h.{i}.mlp.c_proj_2"
 
     # Perform kronecker decomposition and store the values in respective lists
-    h_mlp_c_fc_1, h_mlp_c_fc_2 = kronecker_decompose(checkpoint["model"][c_fc_key], 1536, 32)
-    h_mlp_c_proj_1, h_mlp_c_proj_2 = kronecker_decompose(checkpoint["model"][c_proj_key], 32, 1536)
 
-    checkpoint["model"][fc1]   = h_mlp_c_fc_1.squeeze(0) 
-    checkpoint["model"][fc2]   =  h_mlp_c_fc_2.squeeze(0) 
-    checkpoint["model"][proj1] =  h_mlp_c_proj_1.squeeze(0)
-    checkpoint["model"][proj2] =   h_mlp_c_proj_1.squeeze(0)
+    h_mlp_c_fc_1, h_mlp_c_fc_2 = kronecker_decompose(
+        checkpoint_origin["model"][c_fc_key],
+        1536,
+        32
+    )
 
-print(f"Kron. Decomposition 1")
+    h_mlp_c_proj_1, h_mlp_c_proj_2 = kronecker_decompose(
+        checkpoint_origin["model"][c_proj_key],
+        32, 
+        1536
+    )
 
+    checkpoint_VL["model"][fc1]   = h_mlp_c_fc_1.squeeze(0) 
+    checkpoint_VL["model"][fc2]   =  h_mlp_c_fc_2.squeeze(0) 
+    checkpoint_VL["model"][proj1] =  h_mlp_c_proj_1.squeeze(0)
+    checkpoint_VL["model"][proj2] =   h_mlp_c_proj_2.squeeze(0)
 
-
-
-"""
-## Some useful stuff for when you debug on .ipynb
-
-from model import GPTConfig, KronyGPT 
-
-args = checkpoint["model_args"]
-conf =  GPTConfig(**args)
-model = KronyGPT(conf)
-
-model_state_dict =  model.state_dict() 
-model_params_names = set(model_state_dict)
-
-ckpt_new = {i : model_state_dict[i] 
-            for i in model_state_dict 
-            if ".mlp.c_fc.weight" not in i and ".mlp.c_proj.weight" not in i 
-            }
-
-ckpt2_names = set(ckpt_new.keys())
-
-# number of params:
-print(f"{sum(param2[i].numel() for i in params2):_}")
+print(f">>> Done")
 
 
-Configuring the new chekckpoint:
+model_args = checkpoint_origin["model_args"]
+conf = GPTConfig(**model_args)
+model = GPT(conf)
 
-chpt2_list = list(checkpoint.keys())
-chpt2_list.remove("model")
+for i in model.state_dict():
+    if i in checkpoint_origin["model"].keys():
+        #print(i)
+        checkpoint_VL["model"][i] = checkpoint_origin["model"][i]
 
-checkpoint2 = {}
-for i in chpt2_list:
-    checkpoint2[i] = checkpoint[i]
+print(set(model.state_dict().keys())== set(checkpoint_VL["model"].keys()))
 
-
-checkpoint2["model"] = ckpt_new
-
-
-"""
+torch.save(checkpoint_VL, "out-shakespeare-char/ckpt_VL.pt")

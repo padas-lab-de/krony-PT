@@ -18,6 +18,10 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+
+import torch._dynamo
+torch._dynamo.config.suppress_errors = True
+
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
 
@@ -77,23 +81,37 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
-class KronyMLP(nn.Module):
+
+
+class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-
-        self.c_fc_1    = nn.Parameter(torch.zeros(1536,32))
-        self.c_fc_2    = nn.Parameter(torch.zeros(1, 12))
-
+        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.gelu    = nn.GELU()
-
-        self.c_proj_1  = nn.Parameter(torch.zeros(32,1536))
-        self.c_proj_2  = nn.Parameter(torch.zeros(12,1))
-
+        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        kr1 = torch.kron(self.c_fc_1, self.c_fc_2)
-        kr2 = torch.kron(self.c_proj_1, self.c_proj_2)
+        x = self.c_fc(x)
+        x = self.gelu(x)
+        x = self.c_proj(x)
+        x = self.dropout(x)
+        return x
+    
+
+class KronyMLP(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        self.c_fc_1    = nn.Parameter(torch.zeros(1536,32))
+        self.c_fc_2    = nn.Parameter(torch.zeros(1, 12))
+        self.gelu    = nn.GELU()
+        self.c_proj_1  = nn.Parameter(torch.zeros(32,1536))
+        self.c_proj_2  = nn.Parameter(torch.zeros(12,1))
+        self.dropout = nn.Dropout(config.dropout)
+
+    def forward(self, x):
+        kr1 = torch.kron(self.c_fc_1, self.c_fc_2).T
+        kr2 = torch.kron(self.c_proj_1, self.c_proj_2).T
         x = x@kr1
         x = self.gelu(x)
         x = x@kr2
@@ -191,8 +209,6 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
          
-        print("> I want to see mysefl")
-
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
