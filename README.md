@@ -6,15 +6,29 @@ The goal is to factorize single weight matrices into a product of Kronecker Matr
 
 **TODO:**
 
+* Experiment more / write results.
+	* fix the iter_num in .pt files.
+	* restart the experiement and log everything properly this time. 
+	* wandb is there for a reason!
+
+* MoE? what is it? can we decompose it?
+
 * Write code for distilled initialization of KronyMLP [IN-PROGRESS]
 
-* [URGENT] Code not working so far, try: 
-	* Check if backprop is working with torch.kron()
-	* why is the backprop func only a view?
-	* distill it with random input from checkpoint_origin
 
+
+> **Some prelims findings:**
+
+* KD is slow, but robust to overfitting.
 
 **DONE**
+
+* train more, see if you can hit the 1.4 mark? [YES]
+	* when does the VL decompostion overfit?
+
+* [URGENT] Code not working so far, try:  [DONE]
+	* Check if backprop is working with torch.kron()
+	* why is the backprop func only a view?
 
 * VL decomp are zeros, investigate why [DONE], 
 	* fixed.
@@ -30,6 +44,13 @@ The goal is to factorize single weight matrices into a product of Kronecker Matr
 
 * Write the initial code. [DONE]
 	* Is it working? NO!
+
+### Some Results:
+
+Starting from VL inits:
+* Loss: 
+	* Step 2000: 1.8? ->  5.96?
+	* Step 5000  1.3737
 
 ### Ideas:	
 
