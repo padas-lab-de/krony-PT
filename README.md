@@ -4,15 +4,16 @@ The goal is to factorize single weight matrices into a product of Kronecker Matr
 
 ### Progress
 
-
 **TODO:**
 
 * Write code for distilled initialization of KronyMLP
 
-* [URGENT] Code not working so far, try: 
-	* train a seperate KronyBlock / see if backprop is fine.
-	* distill it with random input from Block
+* VL decomp are zeros, investigate why.
 
+* [URGENT] Code not working so far, try: 
+	* Check if backprop is working with torch.kron()
+	* why is the backprop func only a view?
+	* distill it with random input from checkpoint_origin
 
 **DONE**
 * Find (a not so random) way init. the weights  [DONE]

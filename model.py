@@ -94,8 +94,6 @@ class KronyMLP(nn.Module):
     def forward(self, x):
         kr1 = torch.kron(self.c_fc_1, self.c_fc_2)
         kr2 = torch.kron(self.c_proj_1, self.c_proj_2)
-        print(">>>>>>>>>>>>>> WTF")
-        print(x.shape, kr1.shape, kr2.shape)
         x = x@kr1
         x = self.gelu(x)
         x = x@kr2
