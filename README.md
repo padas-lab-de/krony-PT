@@ -2,26 +2,44 @@ This is a a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/na
 
 The goal is to factorize single weight matrices into a product of Kronecker Matrices. 
 
+---
 ### Progress
 
+Status: Initial code (seems like It) is working.
+
+Some early reports on val loss:
+* Link to wandb.
+
+**Some prelims findings:**
+
+* Original nanoModel is 10.7M, Facftorized model in 4.3M.
+* KD is slow? (not really), but  robust to overfitting.
+	* Q: Is it very robust or do the gradients get saturated? hence, no updates? 
+
+---
 **TODO:**
 
+* Write code for distilled initialization of KronyMLP [IN-PROGRESS]
+	* Test improved KP computations.
+
+* Optimize compute 
+	* Still haven't used any KP props. But I sus. that it would help.
+
 * Experiment more / write results.
-	* fix the iter_num in .pt files.
-	* restart the experiement and log everything properly this time. 
-	* wandb is there for a reason!
+	* different n / m for KroneckerDecom
+	* Try the kronecker decompostion using the lib.
 
 * MoE? what is it? can we decompose it?
 
-* Write code for distilled initialization of KronyMLP [IN-PROGRESS]
-
-
-
-> **Some prelims findings:**
-
-* KD is slow, but robust to overfitting.
-
 **DONE**
+
+* Report using wandb, log everything. [DONE]
+
+* Fix the resume "training"
+	* fix the iter_num in .pt files. [DONE]
+	* I only want to pick the weights (state_dict()) everything else should be same as Training from scratchi [DONE]
+	* Try nanoGPT on a checkpoint.pt, see if the errors of \_dynamo are are persistent. -> Yup, no issue there! Have to debug more and see why.
+
 
 * train more, see if you can hit the 1.4 mark? [YES]
 	* when does the VL decompostion overfit?
@@ -33,6 +51,9 @@ The goal is to factorize single weight matrices into a product of Kronecker Matr
 * VL decomp are zeros, investigate why [DONE], 
 	* fixed.
 
+* Write the initial code. [DONE]
+	* Is it working? NO!
+
 * Find (a not so random) way init. the weights  [DONE]
 	* locate the checkpoints /  weights [DONE]
 	* Decompose using the Van Loan Algorithm 
@@ -41,16 +62,6 @@ The goal is to factorize single weight matrices into a product of Kronecker Matr
 	* You most likely need to pre-train the model, not just fine-tune
 	* Is openWebText feasble? (It should be you got 4 A100 80BG)
 	* Conclusion: Not really, no need.
-
-* Write the initial code. [DONE]
-	* Is it working? NO!
-
-### Some Results:
-
-Starting from VL inits:
-* Loss: 
-	* Step 2000: 1.8? ->  5.96?
-	* Step 5000  1.3737
 
 ### Ideas:	
 

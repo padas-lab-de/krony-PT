@@ -102,22 +102,21 @@ class MLP(nn.Module):
 class KronyMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.c_fc_1    = nn.Parameter(torch.zeros(1536,32))
-        self.c_fc_2    = nn.Parameter(torch.zeros(1, 12))
+        self.c_fc_1    = nn.Parameter(torch.normal(0, 0.02, size=(1536,32)))
+        self.c_fc_2    = nn.Parameter(torch.normal(0, 0.02, size=(1, 12)))
         self.gelu    = nn.GELU()
-        self.c_proj_1  = nn.Parameter(torch.zeros(32,1536))
-        self.c_proj_2  = nn.Parameter(torch.zeros(12,1))
+        self.c_proj_1  = nn.Parameter(torch.normal(0, 0.02, size=(32,1536)))
+        self.c_proj_2  = nn.Parameter(torch.normal(0, 0.02, size=(12,1)))
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        kr1 = torch.kron(self.c_fc_1, self.c_fc_2).T
-        kr2 = torch.kron(self.c_proj_1, self.c_proj_2).T
-        x = x@kr1
+        x = x @ torch.kron(self.c_fc_1, self.c_fc_2).T
         x = self.gelu(x)
-        x = x@kr2
+        x = x @ torch.kron(self.c_proj_1, self.c_proj_2).T
         x = self.dropout(x)
         return x
 
+# this is one attention block with multiple heads
 class KronyBlock(nn.Module):
     def __init__(self, config):
         super().__init__()

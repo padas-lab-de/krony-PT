@@ -109,9 +109,11 @@ print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
+
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
@@ -150,7 +152,7 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
-if init_from == 'resume':
+if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
     # determine the vocab size we'll use for from-scratch training
@@ -161,10 +163,10 @@ if init_from == 'resume':
     model = GPT(gptconf)
 
 ## here we go
-elif init_from == 'scratch':
+elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt-KPXX1_2.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt_VL.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
 
@@ -188,7 +190,8 @@ elif init_from == 'scratch':
             state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 
     model.load_state_dict(state_dict)
-    iter_num = checkpoint['iter_num']
+    #iter_num = checkpoint['iter_num']
+    iter_num = 0
     best_val_loss = checkpoint['best_val_loss']
 
 elif init_from.startswith('gpt2'):
@@ -199,6 +202,9 @@ elif init_from.startswith('gpt2'):
     # read off the created config params, so we can store them into checkpoint correctly
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
+
+
+
 
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
@@ -212,8 +218,9 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 # optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-if init_from == 'resume':
-    optimizer.load_state_dict(checkpoint['optimizer'])
+#if init_from == 'resume':
+#    optimizer.load_state_dict(checkpoint['optimizer'])
+
 checkpoint = None # free up memory
 
 # compile the model
@@ -277,7 +284,6 @@ while True:
     
     # evaluate the loss on train/val sets and write checkpoints
     if iter_num % eval_interval == 0 and master_process:
-        print(f"are we here{iter_num}")
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
@@ -288,7 +294,7 @@ while True:
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
             })
-        if losses['val'] < 1.43 or always_save_checkpoint:
+        if losses['val'] < 1.45 or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
                 checkpoint = {
@@ -300,7 +306,8 @@ while True:
                     'config': config,
                 }
                 print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt-KPXX1_2.pt'))
+                torch.save(checkpoint, os.path.join(out_dir, 'ckpt_VL_10k.pt'))
+     
     if iter_num == 0 and eval_only:
         break
 
