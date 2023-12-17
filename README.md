@@ -5,33 +5,45 @@ The goal is to factorize single weight matrices into a product of Kronecker Matr
 ---
 ### Progress
 
-Status: Initial code (seems like It) is working.
+Status: Initial code (seems like It) is working for MLP decomposition.
 
-Some early reports on val loss:
-* Link to wandb.
+**Some reporting:**
 
-**Some prelims findings:**
-
+* [Link to wandb logs]
+(wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
 * Original nanoModel is 10.7M, Facftorized model in 4.3M.
 * KD is slow? (not really), but  robust to overfitting.
 	* Q: Is it very robust or do the gradients get saturated? hence, no updates? 
 
 ---
-**TODO:**
+### **TODO:**
 
 * Write code for distilled initialization of KronyMLP [IN-PROGRESS]
+	* Initial code not working, **TRY**:
+	* 1.  add batch norm, see if it helps.
+	* 2. instead of random in/out, try actual x,y from data.
 	* Test improved KP computations.
 
-* Optimize compute 
-	* Still haven't used any KP props. But I sus. that it would help.
+* Investigate the `torch.\_dynamo` error:
+	* why does it happen only a few times.
+	* run the experiments without compiling the model, and see if there are any change to the outcome
 
-* Experiment more / write results.
+* I'm very sus of gradients saturation, please see how you can monitor that asap.
+	* would torch profilers help?
+
+* Optimize compute 
+	* Still haven't used any KP props. But I doubt that it would help.
+
+* More Experiment.
 	* different n / m for KroneckerDecom
-	* Try the kronecker decompostion using the lib.
+	* Try the Kronecker decompostion using the lib.
+
+* Clean repo, 
+	* remove unnecessary if/else for readablity.
 
 * MoE? what is it? can we decompose it?
 
-**DONE**
+### **DONE**
 
 * Report using wandb, log everything. [DONE]
 
@@ -40,12 +52,11 @@ Some early reports on val loss:
 	* I only want to pick the weights (state_dict()) everything else should be same as Training from scratchi [DONE]
 	* Try nanoGPT on a checkpoint.pt, see if the errors of \_dynamo are are persistent. -> Yup, no issue there! Have to debug more and see why.
 
-
 * train more, see if you can hit the 1.4 mark? [YES]
 	* when does the VL decompostion overfit?
 
 * [URGENT] Code not working so far, try:  [DONE]
-	* Check if backprop is working with torch.kron()
+	* Check if backprop is working with torch.kron() [looks fine]
 	* why is the backprop func only a view?
 
 * VL decomp are zeros, investigate why [DONE], 
@@ -72,17 +83,13 @@ Some early reports on val loss:
 * The mlp block takes considerable amount % of the total weights.:
 	* decompose them first, make it work.
 	* then do a style of attention. 
-
-* Prune before decompositions (Why should this this should help, though)
-
-* The money is in MLPs, attention blocks are perfect.
-	* Leave them alone or at least change theem last.
-	* Why: 
+	* Why avoid touching attention blocks: 
 	*  1. they are pretty dense.
 	*  2. most use flashattention which is implemented at the cuda level.
 
-* Mixture of Experts as krone decomp? does it make sense?
+* Prune before decompositions (Why should this this should help, though)
 
+* Mixture of Experts as krone decomp? does it make sense?
  
 ### Details
 
@@ -91,10 +98,5 @@ Some early reports on val loss:
 	* `model.py`
 	* my ckeckpoint with kronecker decomposition, is saved in as ckpt2.pt
 * I'm mostly using a single A100 80GB
-
-### Check later:
-
-* The .pynb for scaling/flops.
-* MoE blog in Hugginface?
 
 
