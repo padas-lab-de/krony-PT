@@ -22,9 +22,10 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 	* Initial code not working, **TRY**:
 	* 1.  add batch norm, see if it helps.
 	* 2. instead of random in/out, try actual x,y from data.
-	* Test improved KP computations.
+	* Test/Compare improved KP computations.
 
 * Investigate the `torch.\_dynamo` error:
+	* run the 5M mini-mini gpt
 	* why does it happen only a few times.
 	* run the experiments without compiling the model, and see if there are any change to the outcome
 

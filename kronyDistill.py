@@ -2,17 +2,13 @@ import os
 import time
 import math
 import pickle
-from contextlib import nullcontext
+#from contextlib import nullcontext
 
-import numpy as np
 import torch
 import torch.nn as nn
+import numpy as np
 
-from model import GPTConfig, MLP
 from einops import rearrange
-
-
-
 
 
 def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
@@ -31,103 +27,126 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
     return u * scale, v * scale
 
 
-print(f"gpu burn")
 device = torch.device("cuda:2")
 x = torch.randn(500,500, device = device)
 _ = x@x
-print(f"DONE")
+print(f">>> gpu ready")
 
 
 print(f"loading ckpt-KP and ckpt")
-checkpoint_VL = torch.load('out-shakespeare-char/ckpt-KP.pt')
-checkpoint_origin =  torch.load('out-shakespeare-char/ckpt.pt')
-print(f"DONE")
+checkpoint_VL = torch.load('out-shakespeare-char/ckpt_VL.pt'  , map_location = device)
+checkpoint_origin =  torch.load('out-shakespeare-char/ckpt.pt', map_location = device)
+print(f">>> DONE")
 
-VL_init_all = checkpoint_VL["model"]
-origin_init_all = checkpoint_origin["model"]
-
-
-
-def print_check(checkpoint):  
-    for i in checkpoint: print(i)
+origin = checkpoint_origin["model"]
+VL  = checkpoint_VL["model"] 
 
 
-def distill_block_number(i : int) -> None:
-    pass
+unwanted_prefix = '_orig_mod.'
+for k,v in list(origin.items()):
+    if k.startswith(unwanted_prefix):
+        origin[k[len(unwanted_prefix):]] = origin.pop(k)
 
 
-args = checkpoint_origin["model_args"]
+origin_params = list(origin.keys())
+VL_params = list(VL.keys())
 
-class KronyMLP(nn.Module):
-    def __init__(self, config):
+
+
+# attack plan: 1. add batch norm layers.  2. pray to the DL gods.
+n_embd  = 384
+dropout = 0.2
+bias = False
+
+def get_from_state_dict(ind : int, origin, VL):
+    """
+    get the params from checkpoint["model"], with correct keys to be used as model.load_state_dict()
+    """
+    cfc, cproj = "c_fc", "c_proj"
+    pref_cfc  = f"transformer.h.{ind}.mlp.c_fc"
+    pref_cproj= f"transformer.h.{ind}.mlp.c_proj"
+
+    sd_origin = {
+        "c_fc.weight"  : origin[f"{pref_cfc}.weight"],
+        "c_proj.weight": origin[f"{pref_cproj}.weight"]
+    }
+
+    sd_VL = {
+        f"{cfc}_1"  : VL[f"{pref_cfc}_1"],
+        f"{cproj}_1": VL[f"{pref_cproj}_1"],
+        f"{cfc}_2"  : VL[f"{pref_cfc}_2"],
+        f"{cproj}_2": VL[f"{pref_cproj}_2"]
+    }
+
+    return sd_origin, sd_VL
+
+class MLP(nn.Module):
+    def __init__(self) :
         super().__init__()
-        self.c_fc_1    = nn.Parameter(torch.zeros(1536,32))
-        self.c_fc_2    = nn.Parameter(torch.zeros(1, 12))
+        self.c_fc    = nn.Linear(n_embd, 4 * n_embd, bias=bias)
         self.gelu    = nn.GELU()
-        self.c_proj_1  = nn.Parameter(torch.zeros(32,1536))
-        self.c_proj_2  = nn.Parameter(torch.zeros(12,1))
-        self.dropout = nn.Dropout(config.dropout)
+        self.c_proj  = nn.Linear(4 * n_embd, n_embd, bias=bias)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        kr1 = torch.kron(self.c_fc_1, self.c_fc_2)
-        kr2 = torch.kron(self.c_proj_1, self.c_proj_2)
-        x = x@kr1
+        x = self.c_fc(x)
         x = self.gelu(x)
-        x = x@kr2
+        x = self.c_proj(x)
         x = self.dropout(x)
         return x
 
-# copies original weights of block_h
-def origin_init_block_h(checkpoint, block_num : int):
-    mlp_c_fc =  f"_orig_mod.transformer.h.{block_num}.mlp.c_fc.weight"
-    mlp_c_proj = f"_orig_mod.transformer.h.{block_num}.mlp.c_proj.weight"
-    return checkpoint[mlp_c_fc] ,checkpoint[mlp_c_proj]
+class KronyMLP(nn.Module):
+    def __init__(self) :
+        super().__init__()
+        self.c_fc_1    = nn.Parameter(torch.normal(0, 0.02, size=(1536,32)))
+        self.c_fc_2    = nn.Parameter(torch.normal(0, 0.02, size=(1, 12)))
+        self.gelu    = nn.GELU()
+        self.c_proj_1  = nn.Parameter(torch.normal(0, 0.02, size=(32,1536)))
+        self.c_proj_2  = nn.Parameter(torch.normal(0, 0.02, size=(12,1)))
+        self.dropout = nn.Dropout(dropout)
 
-# copies Van Loan Decomposition of block_h
-def VL_init_block_h(VL_init_all, block_num : int):
-    return  {i[20:]:VL_init_all[i] for i in VL_init_all if f"h.{block_num}.mlp" in i}
-
-
-
-
-w_cfc, w_cproj = origin_init_block_h(origin_init_all, 0)
-
-w_cfc1, w_cfc2 = kronecker_decompose(w_cfc, 1536,32)
-w_cproj1, w_cproj2 = kronecker_decompose(w_cproj, 32, 1536)
-
-print(f"shape check")
-print(w_cfc1.shape, w_cfc2.shape)     
-print(w_cproj1.shape, w_cproj2.shape) 
-
-w_cfc1, w_cfc2     =   w_cfc1.squeeze(0), w_cfc2.squeeze(0)
-w_cproj1, w_cproj2 = w_cproj1.squeeze(0), w_cproj2.squeeze(0)
-
-print(f"shape check")
-print(w_cfc1.shape, w_cfc2.shape)     
-print(w_cproj1.shape, w_cproj2.shape) 
-
-check1 = VL_init_block_h(VL_init_all, 0)
-
-check1["c_fc_1"]   = w_cfc1
-check1["c_fc_2"]   = w_cfc2
-
-check1["c_proj_1"] = w_cproj1
-check1["c_proj_2"] = w_cproj2
+    def forward(self, x):
+        x = x @ torch.kron(self.c_fc_1, self.c_fc_2).T
+        x = self.gelu(x)
+        x = x @ torch.kron(self.c_proj_1, self.c_proj_2).T
+        x = self.dropout(x)
+        return x
 
 
+# model init
 
-# Configuring Krony
-print(f"kronyGPT conf")
-conf = GPTConfig(**args)
-model = KronyMLP(conf)
+orig = MLP()
+KP = KronyMLP()
 
-pre_trained_MLP = MLP(conf)
+# state_dict
+orig_sd, VL_sd = get_from_state_dict(0, origin, VL)
+
+# loading state dicts
+orig.load_state_dict(orig_sd)
+KP.load_state_dict(VL_sd)
+
+# freezing the weights of MLP:
+for w in orig.parameters(): w.requires_grad = False
 
 
-print(f"kronyGPT state dict loading from VL_init")
-model.load_state_dict(check1)
-# Data Stuff
+loss = nn.MSELoss()
+optimizer = torch.optim.SGD(KP.parameters(), lr=0.01)
 
+for i in range(100):
+  x, y = torch.randn(16, n_embd, requires_grad = True, device=device), orig(x)
+
+  f_x = KP(x)
+  l = loss(y, f_x)
+
+  print(f"iter {i} loss {l}")
+
+  optimizer.zero_grad()
+  l.backward()
+  optimizer.step()
+
+
+
+"""
 print(f"Data loading conf")
 train_data = np.memmap('data/shakespeare_char/train.bin', dtype=np.uint16, mode='r')
 val_data = np.memmap('data/shakespeare_char/val.bin', dtype=np.uint16, mode='r')
@@ -149,3 +168,4 @@ def get_batch(split):
 
 
 X, Y = get_batch('train')
+"""
