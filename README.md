@@ -9,8 +9,8 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 
 **Some reporting:**
 
-* [Link to wandb logs]
-(wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
+* [Link to wandb logs](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
+
 * Original nanoModel is 10.7M, Facftorized model in 4.3M.
 * KD is slow? (not really), but  robust to overfitting.
 	* Q: Is it very robust or do the gradients get saturated? hence, no updates? 
@@ -65,9 +65,9 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 * Write the initial code. [DONE]
 	* Is it working? NO!
 
-* Find (a not so random) way init. the weights  [DONE]
-	* locate the checkpoints /  weights [DONE]
-	* Decompose using the Van Loan Algorithm 
+* Find (a not so random) way to init. the weights  [DONE]
+	* [Van Loan Algorithm](https://link.springer.com/chapter/10.1007/978-94-015-8196-7_17)
+	* [See section 2.2 of this paper](https://zarmesh.com/wp-content/uploads/2019/05/An-efficient-method-to-solve-large-linearizable-inverse-pr_2019_Computers-.pdf)
 
 * Pre-training Investigation: [DONE]
 	* You most likely need to pre-train the model, not just fine-tune
