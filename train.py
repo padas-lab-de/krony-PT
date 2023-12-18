@@ -83,29 +83,12 @@ config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
 # various inits, derived attributes, I/O setup
 
-ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+# > ddp if/else removed
 
-if ddp:
-    init_process_group(backend=backend)
-    ddp_rank = int(os.environ['RANK'])
-    ddp_local_rank = int(os.environ['LOCAL_RANK'])
-    ddp_world_size = int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
-    torch.cuda.set_device(device)
-    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
-    seed_offset = ddp_rank # each process gets a different seed
-    # world_size number of processes will be training simultaneously, so we can scale
-    # down the desired gradient accumulation iterations per process proportionally
-    assert gradient_accumulation_steps % ddp_world_size == 0
-    gradient_accumulation_steps //= ddp_world_size
-else:
-    # if not ddp, we are running on a single gpu, and one process
-    master_process = True
-    seed_offset = 0
-    ddp_world_size = 1
-
-tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-print(f"tokens per iteration will be: {tokens_per_iter:,}")
+# if not ddp, we are running on a single gpu, and one process
+master_process = True
+seed_offset = 0
+ddp_world_size = 1
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
@@ -116,13 +99,20 @@ torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
 device_type = 'cuda' if 'cuda' in device else 'cpu' # for later use in torch.autocast
 # note: float16 data type will automatically use a GradScaler
+
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
+
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
 val_data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
+
+tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+
+print(f"tokens per iteration will be: {tokens_per_iter:,}")
+print(f"iterations per epoch: {len(train_data) / tokens_per_iter:,}")
 
 def get_batch(split):
     data = train_data if split == 'train' else val_data
@@ -152,6 +142,8 @@ if os.path.exists(meta_path):
 # model init
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+
+## params loading scratch / resume of gpt2
 if init_from == 'scratch':
     # init a new model from scratch
     print("Initializing a new model from scratch")
@@ -162,7 +154,6 @@ if init_from == 'scratch':
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
 
-## here we go
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
@@ -224,14 +215,10 @@ optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta
 checkpoint = None # free up memory
 
 # compile the model
-if compile:
-    print("compiling the model... (takes a ~minute)")
-    unoptimized_model = model
-    model = torch.compile(model) # requires PyTorch 2.0
+# >> I removed this if compile section. 1. was giving issues / 2. haven't notived any speed improv.
 
 # wrap model into DDP container
-if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank])
+# ddp section deleted
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -272,7 +259,9 @@ if wandb_log and master_process:
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
-raw_model = model.module if ddp else model # unwrap DDP container if needed
+#raw_model = model.module if ddp else model # unwrap DDP container if needed
+raw_model = model # unwrap DDP container if needed
+
 running_mfu = -1.0
 
 while True:
@@ -294,6 +283,7 @@ while True:
                 "lr": lr,
                 "mfu": running_mfu*100, # convert to percentage
             })
+        
         if losses['val'] < 1.45 or always_save_checkpoint:
             best_val_loss = losses['val']
             if iter_num > 0:
@@ -314,16 +304,12 @@ while True:
     # forward backward update, with optional gradient accumulation to simulate larger batch size
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
-        if ddp:
-            # in DDP training we only need to sync gradients at the last micro step.
-            # the official way to do this is with model.no_sync() context manager, but
-            # I really dislike that this bloats the code and forces us to repeat code
-            # looking at the source of that context manager, it just toggles this variable
-            model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+        #if ddp: > deleted.
         with ctx:
             logits, loss = model(X, Y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
+        # new batch
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
@@ -356,5 +342,3 @@ while True:
     if iter_num > max_iters:
         break
 
-if ddp:
-    destroy_process_group()

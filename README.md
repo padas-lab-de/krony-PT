@@ -19,17 +19,12 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 ### **TODO:**
 
 * Write code for distilled initialization of KronyMLP [IN-PROGRESS]
-	* Initial code not working, **TRY**:
+	* Initial code (random i\o) not working, **TRY**:
 	* 1.  add batch norm, see if it helps.
 	* 2. instead of random in/out, try actual x,y from data.
 	* Test/Compare improved KP computations.
 
-* Investigate the `torch.\_dynamo` error:
-	* run the 5M mini-mini gpt
-	* why does it happen only a few times.
-	* run the experiments without compiling the model, and see if there are any change to the outcome
-
-* I'm very sus of gradients saturation, please see how you can monitor that asap.
+* I'm very sus. of gradients saturation, please see how you can monitor that asap.
 	* would torch profilers help?
 
 * Optimize compute 
@@ -45,6 +40,11 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 * MoE? what is it? can we decompose it?
 
 ### **DONE**
+
+* Investigate the `torch._dynamo` error: [DONE]
+	* run the 5M mini-mini gpt [DONE]
+	* run the experiments without compiling the model, and see if there are any change to the outcome [DONE: works fine, I'll drop the /compile for now]
+	* Conclusion: remove `torch.compile()` // I also have not notived any difference in training speed.
 
 * Report using wandb, log everything. [DONE]
 
