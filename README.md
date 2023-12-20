@@ -2,7 +2,7 @@ This is a a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/na
 
 The goal is to factorize single weight matrices into a product of Kronecker Matrices. 
 
----
+
 ### Progress
 
 Status: Initial code (seems like It) is working for MLP decomposition.
@@ -18,11 +18,15 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 ---
 ### **TODO:**
 
-* Write code for distilled initialization of KronyMLP [IN-PROGRESS]
-	* Initial code (random i\o) not working, **TRY**:
-	* 1.  add batch norm, see if it helps.
-	* 2. instead of random in/out, try actual x,y from data.
-	* Test/Compare improved KP computations.
+* In the distillation, have a professional way of:
+	* parameters loading.
+	* right now, I'm setting params manually
+	* this should be done auto, be a professional! it's better for long term dev.
+
+* bring back the DDP, as soon I'll use more than one node.
+
+* Add more KP factors // any links to MoE? Modularity?
+
 
 * I'm very sus. of gradients saturation, please see how you can monitor that asap.
 	* would torch profilers help?
@@ -37,9 +41,18 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 * Clean repo, 
 	* remove unnecessary if/else for readablity.
 
-* MoE? what is it? can we decompose it?
 
 ### **DONE**
+
+* Write code for distilled initialization of KronyMLP [DONE]
+	* Initial code (random i\o) not working, **TRY**:
+	* 1.  add batch norm, see if it helps.
+	* 2. instead of random in/out, try actual x,y from data. 
+	* Test/Compare improved KP computations.
+
+* MoE? what is it? can we decompose it? [DONE]
+	* Conclusion: Good stuff.
+	* Next: loading Mixtral 47B params. playing with it.
 
 * Investigate the `torch._dynamo` error: [DONE]
 	* run the 5M mini-mini gpt [DONE]

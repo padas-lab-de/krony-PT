@@ -194,9 +194,6 @@ elif init_from.startswith('gpt2'):
     for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = getattr(model.config, k)
 
-
-
-
 # crop down the model block size if desired, using model surgery
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
@@ -206,19 +203,13 @@ model.to(device)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
-
-# optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+
 #if init_from == 'resume':
 #    optimizer.load_state_dict(checkpoint['optimizer'])
 
 checkpoint = None # free up memory
 
-# compile the model
-# >> I removed this if compile section. 1. was giving issues / 2. haven't notived any speed improv.
-
-# wrap model into DDP container
-# ddp section deleted
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -265,6 +256,7 @@ raw_model = model # unwrap DDP container if needed
 running_mfu = -1.0
 
 while True:
+    ## wtf is this branch about?
 
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate

@@ -1,11 +1,10 @@
 """
 Full definition of a GPT Language Model, all of it in this single file.
-
 References:
-
+1) the official GPT-2 TensorFlow implementation released by OpenAI:
+https://github.com/openai/gpt-2/blob/master/src/model.py
 2) huggingface/transformers PyTorch implementation:
 https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
-
 """
 
 import math
@@ -15,10 +14,6 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-
-
-import torch._dynamo
-torch._dynamo.config.suppress_errors = True
 
 class LayerNorm(nn.Module):
     """ LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False """
@@ -32,6 +27,7 @@ class LayerNorm(nn.Module):
         return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
 
 class CausalSelfAttention(nn.Module):
+
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
@@ -79,9 +75,8 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
-
-
 class MLP(nn.Module):
+
     def __init__(self, config):
         super().__init__()
         self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
@@ -95,37 +90,15 @@ class MLP(nn.Module):
         x = self.c_proj(x)
         x = self.dropout(x)
         return x
-    
 
-class KronyMLP(nn.Module):
-    def __init__(self, config):
-        super().__init__()
+class Block(nn.Module):
 
-        self.c_fc_1    = nn.Parameter(torch.normal(0, 0.02, size=(1536,32)))
-        self.c_fc_2    = nn.Parameter(torch.normal(0, 0.02, size=(1, 12)))
-
-        self.c_proj_1  = nn.Parameter(torch.normal(0, 0.02, size=(32,1536)))
-        self.c_proj_2  = nn.Parameter(torch.normal(0, 0.02, size=(12,1)))
-
-        self.gelu    = nn.GELU()
-
-        self.dropout = nn.Dropout(config.dropout)
-
-    def forward(self, x):
-        x = x @ (torch.kron(self.c_fc_1, self.c_fc_2).T)
-        x = self.gelu(x)
-        x = x @ (torch.kron(self.c_proj_1, self.c_proj_2).T)
-        x = self.dropout(x)
-        return x
-
-# this is one attention block with multiple heads
-class KronyBlock(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
-        self.mlp = KronyMLP(config)
+        self.mlp = MLP(config)
 
     def forward(self, x):
         x = x + self.attn(self.ln_1(x))
@@ -142,7 +115,8 @@ class GPTConfig:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
 
-class KronyGPT(nn.Module):
+
+class GPT(nn.Module):
 
     def __init__(self, config):
         super().__init__()
@@ -150,24 +124,16 @@ class KronyGPT(nn.Module):
         assert config.block_size is not None
         self.config = config
 
-
-        self.transformer = nn.ModuleDict(
-            dict(
-                wte = nn.Embedding(config.vocab_size, config.n_embd),
-                wpe = nn.Embedding(config.block_size, config.n_embd),
-                drop = nn.Dropout(config.dropout),
-                h = nn.ModuleList([KronyBlock(config) for _ in range(config.n_layer)]),
-                ln_f = LayerNorm(config.n_embd, bias=config.bias),
-            )
-        )
+        self.transformer = nn.ModuleDict(dict(
+            wte = nn.Embedding(config.vocab_size, config.n_embd),
+            wpe = nn.Embedding(config.block_size, config.n_embd),
+            drop = nn.Dropout(config.dropout),
+            h = nn.ModuleList([Block(config) for _ in range(config.n_layer)]),
+            ln_f = LayerNorm(config.n_embd, bias=config.bias),
+        ))
 
         self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
-
-        # with weight tying when using torch.compile() some warnings get generated:
-        # "UserWarning: functional_call was passed multiple values for tied weights.
-        # This behavior is deprecated and will be an error in future versions"
-        # not 100% sure what this is, so far seems to be harmless. TODO investigate
-        self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
+        self.transformer.wte.weight = self.lm_head.weight
 
         # init all weights
         self.apply(self._init_weights)
@@ -175,21 +141,6 @@ class KronyGPT(nn.Module):
         for pn, p in self.named_parameters():
             if pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
-
-        # report number of parameters
-        print("number of parameters: %.2fM" % (self.get_num_params()/1e6,))
-
-    def get_num_params(self, non_embedding=True):
-        """
-        Return the number of parameters in the model.
-        For non-embedding count (default), the position embeddings get subtracted.
-        The token embeddings would too, except due to the parameter sharing these
-        params are actually used as weights in the final layer, so we include them.
-        """
-        n_params = sum(p.numel() for p in self.parameters())
-        if non_embedding:
-            n_params -= self.transformer.wpe.weight.numel()
-        return n_params
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -204,12 +155,11 @@ class KronyGPT(nn.Module):
         b, t = idx.size()
         assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
-
+                 
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
-         
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -262,7 +212,7 @@ class KronyGPT(nn.Module):
             config_args['dropout'] = override_args['dropout']
         # create a from-scratch initialized minGPT model
         config = GPTConfig(**config_args)
-        model = (config)
+        model = GPT(config)
         sd = model.state_dict()
         sd_keys = sd.keys()
         sd_keys = [k for k in sd_keys if not k.endswith('.attn.bias')] # discard this mask / buffer, not a param
