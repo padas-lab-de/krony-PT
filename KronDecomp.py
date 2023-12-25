@@ -56,6 +56,8 @@ _ = x@x
 print(">>> Loading")
 checkpoint_origin = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
 
+
+# fix this prefix shit for once and all.
 unwanted_prefix = '_orig_mod.'
 
 state_dict = checkpoint_origin["model"]

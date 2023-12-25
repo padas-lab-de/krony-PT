@@ -1,8 +1,8 @@
 This is a a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/) :goat:.
 
-The goal is to factorize single weight matrices into a product of Kronecker Matrices. 
+The goal is to factorize single weight matrices into a product of Kronecker Matrices.
 
-
+---
 ### Progress
 
 Status: Initial code (seems like It) is working for MLP decomposition.
@@ -18,7 +18,38 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 ---
 ### **TODO:**
 
-* In the distillation, have a professional way of:
+* (As I suspected) when I freeze all the weights. And only train the new plugged in weights. 
+	* The network doesn't learn anything.
+
+* change the behavior of optimizers, mainly the lr:	
+	* currently even the pre-trained params are set to the same lr as the other decomposed matrices. 
+	* doesn't seem right.
+
+* **Experiments that needs to be done:**
+1. Freeze then distill:
+	* All at once for 6k steps:
+	* 1 by 1 for 1k per layer:
+2. Freeze other pre-trained weights.
+	* i.e.:  only allow new weights to be trained to catch-up
+
+3. When you don't freeze the original weights, make them have a separate lr.
+	* the lack of details regarding this in papers is seriously mind boggling.
+
+
+* how can you monitor what is your network learning?
+	* we need some serious logging of the gradients. 
+	* start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
+
+* Kronecker Decompostion is actually not the closest to W:
+	* i.e., when I distill the student/teacher. the mse btw the original weights and KP weights actually gets bigger. this is kinda surprising, but it could make sense somehow.
+	* I should be able to  the val loss, if that one decreases while the mse increases, then that's fine.
+	* next: add grad accumulation (I doubt that It would help) 
+	* also add grad-clipping
+	* this is  (potentially) a good point.. 
+	* Investigate this more.
+
+
+* In the distillation, have a quick/efficient way of:
 	* parameters loading.
 	* right now, I'm setting params manually
 	* this should be done auto, be a professional! it's better for long term dev.

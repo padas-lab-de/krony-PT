@@ -27,7 +27,7 @@ import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
-from model import GPTConfig, GPT
+from model import GPTConfig, KronyGPT
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -152,12 +152,12 @@ if init_from == 'scratch':
         print("defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
     model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
     gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
+    model = KronyGPT(gptconf)
 
 elif init_from == 'resume':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'ckpt_VL.pt')
+    ckpt_path = os.path.join(out_dir, 'ckpt-distill-1.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
     checkpoint_model_args = checkpoint['model_args']
 
@@ -169,7 +169,7 @@ elif init_from == 'resume':
 
     # create the model
     gptconf = GPTConfig(**model_args)
-    model = GPT(gptconf)
+    model = KronyGPT(gptconf)
     state_dict = checkpoint['model']
 
     # fix the keys of the state dictionary :(
@@ -200,11 +200,14 @@ if block_size < model.config.block_size:
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
 
 model.to(device)
+for pn,p  in model.named_parameters():
+    if not pn.endswith("_1") and not pn.endswith("_2"):
+        p.requires_grad = False
+
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
-
 #if init_from == 'resume':
 #    optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -248,8 +251,10 @@ if wandb_log and master_process:
 
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
+
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
+
 #raw_model = model.module if ddp else model # unwrap DDP container if needed
 raw_model = model # unwrap DDP container if needed
 

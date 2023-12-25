@@ -3,7 +3,7 @@
 
 out_dir = 'out-shakespeare-char'
 eval_interval = 50 # keep frequent because we'll overfit
-eval_iters = 50
+eval_iters = 100
 log_interval = 10 # don't print too too often
 
 # we expect to overfit on this small dataset, so only save when val improves

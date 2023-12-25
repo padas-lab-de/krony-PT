@@ -21,6 +21,7 @@ import math
 import pickle
 from contextlib import nullcontext
 
+
 import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -28,14 +29,20 @@ from torch.distributed import init_process_group, destroy_process_group
 
 import torch.nn.functional as F
 
+from model_origin import GPT, GPTConfig
+from model import KronyGPT
+from config.train_shakespeare_char import *
+
+
+import wandb
 
 device = 'cuda'
-dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' 
-# 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+device_type = 'cuda'
+dtype = 'bfloat16'   # what is the diff between bfloat16 and float16?
 compile = True
 
-
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
+
 exec(open('configurator.py').read()) # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
@@ -43,13 +50,11 @@ master_process = True
 seed_offset = 0
 ddp_world_size = 1
 
-out_dir = 'out'
 
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
-device_type = 'cuda'
 
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
@@ -60,11 +65,6 @@ data_dir =   'data/shakespeare_char'
 
 train_data = np.memmap(f"{data_dir}/train.bin", dtype=np.uint16, mode='r')
 val_data = np.memmap(f'{data_dir}/val.bin', dtype=np.uint16, mode='r')
-
-gradient_accumulation_steps = 1
-batch_size = 64
-block_size = 256 # context of up to 256 previous characters
-
 
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
 
@@ -84,18 +84,29 @@ def get_batch(split):
     return x, y
 
 
+eval_iters = 50
+
+## eval function:
+@torch.no_grad()
+def estimate_loss(model):
+    out = {}
+    model.eval()
+    for split in ['train', 'val']:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X, Y = get_batch(split)
+            with ctx:
+                _ , loss = model(X, Y)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
+
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
 
-lr_decay_iters = 1000 # make equal to max_iters usually
-min_lr = 1e-4 # learning_rate / 10 usually
-beta2 = 0.99 # make a bit bigger because number of tokens per iter is small
-
-wandb_log = False
-warmup_iters = 50
-learning_rate = 1e-3
 
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
@@ -116,17 +127,15 @@ def get_lr(it):
 #    import wandb
 #    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
-print(f"geuss we are here after all")
 
-from model_origin import GPT, GPTConfig
-from model import KronyGPT
 
 # GPT conf for both teacher and student net
 ckpt_path = 'out-shakespeare-char/ckpt.pt'
 checkpoint = torch.load(ckpt_path, map_location=device)
 checkpoint_model_args = checkpoint['model_args']
 
-model_args = {}
+
+model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size, vocab_size=None, dropout=dropout)
 
 for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
@@ -145,11 +154,7 @@ for k,v in list(state_dict.items()):
         state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
 
 teacher.load_state_dict(state_dict)
-# freez the weight of the teacher model:
 
-for n,p in teacher.named_parameters():
-    p.requires_grad = False
-    
 
 
 # Loading the student:
@@ -161,19 +166,27 @@ student = KronyGPT(gptconf)
 state_dict_VL = checkpoint_VL['model']
 student.load_state_dict(state_dict_VL)
 
+# freeze the weight of the student/teacher.
+# student weights will updated gradually.
+
+for n,p in teacher.named_parameters():
+    p.requires_grad = False
+    
+for n,p in student.named_parameters():
+    p.requires_grad = False
+
 print(f"loading the homies to(device) ")
 student.to(device)
 teacher.to(device)
 
 ### I need to layer down all layers so I have more control when iterating:
-
 ###  teacher:
 teacher_wte = teacher.transformer.wte
 teacher_wpe = teacher.transformer.wpe
 teacher_drop = teacher.transformer.drop
 teacher_h = teacher.transformer.h
 teacher_ln_f = teacher.transformer.ln_f
-teacher.lm_head = teacher.lm_head
+teacher_lm_head = teacher.lm_head
 
 ###  student:
 student_wte = student.transformer.wte
@@ -181,26 +194,7 @@ student_wpe = student.transformer.wpe
 student_drop = student.transformer.drop
 student_h = student.transformer.h
 student_ln_f = student.transformer.ln_f
-student.lm_head = student.lm_head
-
-## eval function:
-
-eval_iters = 10
-
-@torch.no_grad()
-def estimate_loss():
-    out = {}
-    student.eval()
-    for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
-        for k in range(eval_iters):
-            X, Y = get_batch(split)
-            with ctx:
-                _ , loss = student(X, Y)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
-    student.train()
-    return out
+student_lm_head = student.lm_head
 
 # let the game begin:
 
@@ -208,129 +202,100 @@ weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
 
+print(f"wandb magic gon happen")
+# wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+
+
+
+def freeze_layer(layer_num: int, freeze: bool):
+    for n,p in student_h[layer_num].named_parameters(): 
+        if n.endswith("_1") or n.endswith("_2"):
+            p.requires_grad = freeze 
+
+for i in range(6):
+    freeze_layer(i, True)
+
 optimizer = student.configure_optimizers(weight_decay , learning_rate, (beta1, beta2), device_type)
 
-for it in range(100):
+eval_interval  = 100
+
+for iter_num in range(2000):
     lr = get_lr(iter_num)
+    #lr = 0.001
     batch, target = get_batch(train_data)
     b, t = batch.size()
     pos = torch.arange(0, t, dtype=torch.long, device=device)
 
-    #teacher forward pass
-    tok_emb_teacher = teacher_wte(batch)
-    pos_emb_teacher = teacher_wpe(pos)
-    x_teacher = teacher_drop(tok_emb_teacher + pos_emb_teacher)
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
-    # student forward pass
+    #teacher and student, tokens encoding.
     tok_emb = student_wte(batch)
     pos_emb = student_wpe(pos)
     x = student_drop(tok_emb + pos_emb)
 
-    l = (x - x_teacher)**2
 
-    for i in range(6):  # for each layer...
+    #l = 0 
+    distill_layer = iter_num // 1000
+    
+
+    l = 0 
+    for i in range(distill_layer + 1):
         x = student_h[i](x)
         x_teacher = teacher_h[i](x)
-
-        l += (x - x_teacher)**2
-
-    ll  = l.mean()
-    print(ll)
-
-    optimizer.zero_grad()
-    ll.backward()
-    optimizer.step()
-
-
-'''
-
-
-# training loop
-X, Y = get_batch('train') # fetch the very first batch
-t0 = time.time()
-local_iter_num = 0 # number of iterations in the lifetime of this process
-#raw_model = model.module if ddp else model # unwrap DDP container if needed
-raw_model = model # unwrap DDP container if needed
-
-running_mfu = -1.0
-
-while True:
-    ## wtf is this branch about?
-
-    # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-    
-    # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
+        l += F.mse_loss(x, x_teacher)
         
-        if losses['val'] < 1.45 or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                }
-                print(f"saving checkpoint to {out_dir}")
-                torch.save(checkpoint, os.path.join(out_dir, 'ckpt_VL_10k.pt'))
-     
-    if iter_num == 0 and eval_only:
-        break
+    l.backward()
+    optimizer.step()
+    optimizer.zero_grad()
 
-    # forward backward update, with optional gradient accumulation to simulate larger batch size
-    # and using the GradScaler if data type is float16
-    for micro_step in range(gradient_accumulation_steps):
-        #if ddp: > deleted.
-        with ctx:
-            logits, loss = model(X, Y)
-            loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
-        # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        # new batch
-        X, Y = get_batch('train')
-        # backward pass, with gradient scaling if training in fp16
-        scaler.scale(loss).backward()
-    # clip the gradient
-    if grad_clip != 0.0:
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    # step the optimizer and scaler if training in fp16
-    scaler.step(optimizer)
-    scaler.update()
-    # flush the gradients as soon as we can, no need for this memory anymore
-    optimizer.zero_grad(set_to_none=True)
+    if iter_num % eval_interval == 0 :
+        losses = estimate_loss(student)
+        print(f">>>> step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        print(f">> Distillation loss: {l}, learning rate {lr}")
 
-    # timing and logging
-    t1 = time.time()
-    dt = t1 - t0
-    t0 = t1
-    if iter_num % log_interval == 0 and master_process:
-        # get loss as float. note: this is a CPU-GPU sync point
-        # scale up to undo the division above, approximating the true total loss (exact would have been a sum)
-        lossf = loss.item() * gradient_accumulation_steps
-        if local_iter_num >= 5: # let the training loop settle a bit
-            mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
-            running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        #print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
-    iter_num += 1
-    local_iter_num += 1
+        #wandb.log({
+        #    "train/loss": losses['train'],
+        #    "val/loss": losses['val'],
+        #    "distill loss": l,
+        #})
 
-    # termination conditions
-    if iter_num > max_iters:
-        break
 
 '''
+    if iter_num % 1000 == 0:
+        cfc = f""
+        cproj = f"" 
+
+        if iter_num == 0:
+            # unfreeze layer 0
+            pass
+        else:
+            # freeze past layer
+            pass
+            # unfreeze curret layer
+
+'''
+names = list(checkpoint_VL["model"])
+n1, n2 = names[0], names[1]
+
+sd_student = student.state_dict()
+x1, x2 = sd_student[n1], sd_student[n2]
+
+y1, y2 = state_dict_VL[n1], state_dict_VL[n2]
+
+orig = state_dict[f"{n1[:-2]}.weight"]
+
+### step 1: inits:
+
+### distillation 1 by 1
+
+### model post-training (fine-tuning)               
+
+"""
+
+
+model-1:
+
+for i in range(6):
+    model 2 re-eval:
+"""
