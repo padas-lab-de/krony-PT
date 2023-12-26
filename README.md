@@ -18,8 +18,17 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 ---
 ### **TODO:**
 
+*  Q:
+	* Freezing the weights apparently helps, is there a way to quantify the impact?
+	* How the KP factos are changing with and without freezing of other wieghts?
+	* Some metric applied on the grads? 
+* Start working on GPT2. 
+	* reproduce the scroes from the paper on GLUE. >> should be a priority.
+	* Setup training with 3 nodes.
+
 * (As I suspected) when I freeze all the weights. And only train the new plugged in weights. 
 	* The network doesn't learn anything.
+	* Not really, optimized had a bug, now fixed. Freezing helps activating more.
 
 * change the behavior of optimizers, mainly the lr:	
 	* currently even the pre-trained params are set to the same lr as the other decomposed matrices. 

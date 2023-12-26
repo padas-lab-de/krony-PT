@@ -21,7 +21,6 @@ import math
 import pickle
 from contextlib import nullcontext
 
-
 import numpy as np
 import torch
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -54,7 +53,6 @@ ddp_world_size = 1
 torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-
 
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
