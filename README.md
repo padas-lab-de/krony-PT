@@ -1,4 +1,4 @@
-This is a a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/) :goat:.
+This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/) :goat:.
 
 The goal is to factorize single weight matrices into a product of Kronecker Matrices.
 
@@ -11,12 +11,27 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 
 * [Link to wandb logs](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
 
-* Original nanoModel is 10.7M, Facftorized model in 4.3M.
+* Original nanoModel is 10.7M, Factorized model in 4.3M.
 * KD is slow? (not really), but  robust to overfitting.
-	* Q: Is it very robust or do the gradients get saturated? hence, no updates? 
+	* Q: Is it very robust or do the gradients get saturated? Hence, no updates? 
 
 ---
 ### **TODO:**
+
+**Update:** 
+
+I feel the small model with characters is so unreliable. I can literally get the model to do anything I want with more training. hence, I can't trust. I'll just switch all my focus on GPT2 124M model.
+
+* Optimizer:
+	* Optimizer need to be re-written.
+	* Need a way to split between, pre-trained weights and newly introduced ones. So we can log differences...
+
+* GPT 124M -- Init. work
+	* Loading / Testing with multiple nodes.
+	* What is webtext? download / play with.
+	* Reproduing the loss // compare with original
+	* Other benchmarks. GLUE? 
+	* Decompose. And test all hypothesis.
 
 *  Q:
 	* Freezing the weights apparently helps, is there a way to quantify the impact?

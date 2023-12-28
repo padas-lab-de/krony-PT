@@ -1,10 +1,9 @@
 # train a miniature character-level shakespeare model
-# good for debugging and playing on macbooks and such
 
 out_dir = 'out-shakespeare-char'
 
 eval_interval = 50 # keep frequent because we'll overfit
-eval_iters = 20  # this one is used by estimate_loss()
+eval_iters = 20  # this one is used by estimate_loss(), usually set 
 
 max_iters = 1000 
 lr_decay_iters = max_iters 

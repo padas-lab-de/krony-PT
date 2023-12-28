@@ -5,7 +5,7 @@ from einops import rearrange
 from typing import Tuple
 
 from model import GPT, GPTConfig
-# add original link to the implementation.
+# add original link to the implementation. > twitter lol
 
 def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
     """
@@ -46,7 +46,8 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
     return u * scale, v * scale
 
 
-device = torch.device("cuda:3")
+
+device = torch.device("cuda")
 
 ## GPU runtime innit:
 x =  torch.randn(500,500, device = device)
@@ -54,6 +55,9 @@ _ = x@x
 ## GPU burned and happy.
 
 print(">>> Loading")
+
+
+# automate this shit, from terminal 
 checkpoint_origin = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
 
 
@@ -69,54 +73,64 @@ for k,v in list(state_dict.items()):
 print(">>> Done")
 
 
-#Initial KronP decom. could be obtained as follows:
-
-checkpoint_VL = {i : checkpoint_origin[i] for i in checkpoint_origin if i!= "model"}
-checkpoint_VL["model"] = {}
 
 
-print(f"Kron. Decomposition 0")
-
-for i in range(6):
-    c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
-    c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
-
-    fc1 = f"transformer.h.{i}.mlp.c_fc_1"
-    fc2 = f"transformer.h.{i}.mlp.c_fc_2"
-    proj1 = f"transformer.h.{i}.mlp.c_proj_1"
-    proj2 = f"transformer.h.{i}.mlp.c_proj_2"
-
-    # Perform kronecker decomposition and store the values in respective lists
-
-    h_mlp_c_fc_1, h_mlp_c_fc_2 = kronecker_decompose(
-        checkpoint_origin["model"][c_fc_key],
-        1536,
-        32
-    )
-
-    h_mlp_c_proj_1, h_mlp_c_proj_2 = kronecker_decompose(
-        checkpoint_origin["model"][c_proj_key],
-        32, 
-        1536
-    )
-
-    checkpoint_VL["model"][fc1]   = h_mlp_c_fc_1.squeeze(0) 
-    checkpoint_VL["model"][fc2]   =  h_mlp_c_fc_2.squeeze(0) 
-    checkpoint_VL["model"][proj1] =  h_mlp_c_proj_1.squeeze(0)
-    checkpoint_VL["model"][proj2] =   h_mlp_c_proj_2.squeeze(0)
-
-print(f">>> Done")
 
 
-model_args = checkpoint_origin["model_args"]
-conf = GPTConfig(**model_args)
-model = GPT(conf)
 
-for i in model.state_dict():
-    if i in checkpoint_origin["model"].keys():
-        #print(i)
-        checkpoint_VL["model"][i] = checkpoint_origin["model"][i]
+def kron_it(checkpoint, n: int, m: int, fac: int):
+    """
+    n: first dim
+    m: second dim
+    fac: number of factors
+    TODO:
+        * add checks / assert of dimension. 
+        * have a manuel way of inputs from terminal, man be a professional
+        * completely automate this shit.
+    """
+    # new checkpoint 
+    checkpoint_VL = {i : checkpoint[i] for i in checkpoint if i!= "model"}
+    checkpoint_VL["model"] = {}
 
-print(set(model.state_dict().keys())== set(checkpoint_VL["model"].keys()))
+    config = checkpoint["config"]
+    nms_origin = set(checkpoint["model"].keys())
+    n_layer = config["_layer"]
 
-torch.save(checkpoint_VL, "out-shakespeare-char/ckpt_VL.pt")
+    for i in range(n_layer):
+        c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+        c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
+
+
+        # Perform kronecker decomposition and store the values in respective lists
+
+        cfc_h = kronecker_decompose(
+            checkpoint_origin["model"][c_fc_key],
+            n,
+            m
+        )
+
+        cproj_h = kronecker_decompose(
+            checkpoint_origin["model"][c_proj_key],
+            n,
+            m
+        )
+        
+        for f in range(fac):
+            for k in range(2):
+                fc = f"transformer.h.{i}.mlp.c_fc_{f}{k}"
+                proj = f"transformer.h.{i}.mlp.c_proj_{f}{k}"
+                checkpoint_VL["model"][fc]   = cfc_h[k].squeeze(0) # cfc[] cproj[] needs to change below 
+                checkpoint_VL["model"][proj] =  cproj_h[k].squeeze(0)  # cfc[] cproj[] needs to change below 
+
+    for i in nms_origin:
+            checkpoint_VL["model"][i] = checkpoint_origin["model"][i]
+
+    custom_name = f"ckpt_{n}_{m}_{fac}"
+    torch.save(checkpoint_VL, "out/{custom_name}.pt")
+    return 1 
+
+
+
+#print(set(model.state_dict().keys())== set(checkpoint_VL["model"].keys()))
+
+
