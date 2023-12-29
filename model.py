@@ -97,21 +97,33 @@ class MLP(nn.Module):
 class KronyMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
+        # 48*32  ////  32*12
+        self.factors = config.factors
 
-        self.c_fc_1    = nn.Parameter(torch.normal(0, 0.02, size=(1536,32)))
-        self.c_fc_2    = nn.Parameter(torch.normal(0, 0.02, size=(1, 12)))
+        # see if you later have a super parameter as torch.stack().. TODO
 
-        self.c_proj_1  = nn.Parameter(torch.normal(0, 0.02, size=(32,1536)))
-        self.c_proj_2  = nn.Parameter(torch.normal(0, 0.02, size=(12,1)))
+        for f in range(config.factors): # each f is one factor 
+            #for i in range(1,3):  # W_1 x W_2
+            setattr(self, f"c_fc_{f}_1"  , nn.Parameter(torch.normal(0, 0.02, size=(48,32))))
+            setattr(self, f"c_proj_{f}_1",   nn.Parameter(torch.normal(0, 0.02, size=(32,12))))
+            setattr(self, f"c_fc_{f}_2"  , nn.Parameter(torch.normal(0, 0.02, size=(32,12))))
+            setattr(self, f"c_proj_{f}_2",   nn.Parameter(torch.normal(0, 0.02, size=(12,32))))
 
         self.gelu    = nn.GELU()
-
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        x = x @ (torch.kron(self.c_fc_1, self.c_fc_2).T)
+        s_cfc =  [
+            torch.kron(getattr(self, f"c_fc_{f}_1"), getattr(self, f"c_fc_{f}_2"))
+            for f in range(self.factors)
+        ]
+        x = x @ torch.sum(s_cfc)
         x = self.gelu(x)
-        x = x @ (torch.kron(self.c_proj_1, self.c_proj_2).T)
+        s_cproj =  [
+            torch.kron(getattr(self, f"c_proj_{f}_1"), getattr(self, f"c_proj_{f}_2"))
+            for f in range(self.factors)
+        ]
+        x = x @ torch.sum(s_cproj)
         x = self.dropout(x)
         return x
 
@@ -138,6 +150,10 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    factors: int = 3 
+    dim = [32, 32] # made it a list to faciliate implementation inside KronyMLP
+    # think of a better way of handling this
+
 
 class KronyGPT(nn.Module):
 

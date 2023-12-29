@@ -1,11 +1,14 @@
 This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/) :goat:.
 
-The goal is to factorize single weight matrices into a product of Kronecker Matrices.
-
+### Goals: 
+1. Factorize single weight matrices into a product of Kroneckers.
+2. Test scaling of distillation / training.
+3. Test impact of adding multiple Kroneckers.
+4. Test if weights freezing has any significance to post-training or distillation.
 ---
 ### Progress
 
-Status: Initial code (seems like It) is working for MLP decomposition.
+**Status:** I'm moving to GPT2 124M. 
 
 **Some reporting:**
 
@@ -35,7 +38,12 @@ I feel like the small model ( 10M with characters) is very unreliable. I can lit
 	* Add other benchmarks.
 	* time to embrace the power of HF
 
-* Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac*
+* Write code for multiple Kron Products factors:
+	* you have to make it easier to **load** the state weights from outside.
+	* (Soon, I want to make it end2end decompose-traning-evaluate.)
+	* (the less interventions the better)
+
+* Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac* **[DONE]**
 	* one script should run from terminal
 	* please fix the splitting asap, cfc and cproj should have opposite terms.
 

@@ -90,8 +90,8 @@ def kron_it(checkpoint, n: int, m: int, fac: int):
         c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
         c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
 
-
         # Perform kronecker decomposition and store the values in respective lists
+
 
         cfc_h = kronecker_decompose(
             checkpoint_origin["model"][c_fc_key],
@@ -116,12 +116,23 @@ def kron_it(checkpoint, n: int, m: int, fac: int):
     # remove this cmt later            
     #for i in nms_origin:
     #        checkpoint_VL["model"][i] = checkpoint_origin["model"][i]
-
     #custom_name = f"ckpt_{n}_{m}_{fac}"
     #torch.save(checkpoint_VL, "out/{custom_name}.pt")
-    return checkpoint_VL["model"]
+    nms  = list(state_dict.keys())
+    h0 = [i for i in nms in "h.0.mlp.c_fc" in i]
+
+    s = 0 
+
+    for i in range(0, len(h0),2):
+        s += checkpoint_VL["model"][h0[i]], checkpoint_VL[h0[i+1]]
+
+    return   s
 
 
+cfc = state_dict["transformer.h.0.mlp.c_fc.weight"]
 #print(set(model.state_dict().keys())== set(checkpoint_VL["model"].keys()))
+
+
+
 
 
