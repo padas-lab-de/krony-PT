@@ -1,12 +1,9 @@
 import torch
-import torch.nn as nn
 
 from einops import rearrange
 from typing import Tuple
 
-from model import GPT, GPTConfig
-# add original link to the implementation. > twitter lol
-
+# add original link to the implementation. > I'm following her on Twitter, Hailey smth.
 def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
     """
       Frobenius-optimal decomposition of `A` into a sum of `k` Kronecker products.
@@ -50,13 +47,12 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
 device = torch.device("cuda")
 
 ## GPU runtime innit:
+print(">>> GPU burn")
 x =  torch.randn(500,500, device = device)
 _ = x@x
 ## GPU burned and happy.
 
-print(">>> Loading")
-
-
+print(">>> Loading the ckpt")
 # automate this shit, from terminal 
 checkpoint_origin = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
 
@@ -73,11 +69,6 @@ for k,v in list(state_dict.items()):
 print(">>> Done")
 
 
-
-
-
-
-
 def kron_it(checkpoint, n: int, m: int, fac: int):
     """
     n: first dim
@@ -92,9 +83,8 @@ def kron_it(checkpoint, n: int, m: int, fac: int):
     checkpoint_VL = {i : checkpoint[i] for i in checkpoint if i!= "model"}
     checkpoint_VL["model"] = {}
 
-    config = checkpoint["config"]
+    n_layer = checkpoint["model_args"]["n_layer"]
     nms_origin = set(checkpoint["model"].keys())
-    n_layer = config["_layer"]
 
     for i in range(n_layer):
         c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
@@ -106,29 +96,30 @@ def kron_it(checkpoint, n: int, m: int, fac: int):
         cfc_h = kronecker_decompose(
             checkpoint_origin["model"][c_fc_key],
             n,
-            m
+            m,
+            k = fac
         )
 
         cproj_h = kronecker_decompose(
             checkpoint_origin["model"][c_proj_key],
+            m,
             n,
-            m
+            k = fac
         )
         
         for f in range(fac):
             for k in range(2):
-                fc = f"transformer.h.{i}.mlp.c_fc_{f}{k}"
-                proj = f"transformer.h.{i}.mlp.c_proj_{f}{k}"
-                checkpoint_VL["model"][fc]   = cfc_h[k].squeeze(0) # cfc[] cproj[] needs to change below 
-                checkpoint_VL["model"][proj] =  cproj_h[k].squeeze(0)  # cfc[] cproj[] needs to change below 
+                fc = f"transformer.h.{i}.mlp.c_fc_{f}.{k}"
+                proj = f"transformer.h.{i}.mlp.c_proj_{f}.{k}"
+                checkpoint_VL["model"][fc]   = cfc_h[k][f] # cfc[] cproj[] needs to change below 
+                checkpoint_VL["model"][proj] =  cproj_h[k][f]  # cfc[] cproj[] needs to change below 
+    # remove this cmt later            
+    #for i in nms_origin:
+    #        checkpoint_VL["model"][i] = checkpoint_origin["model"][i]
 
-    for i in nms_origin:
-            checkpoint_VL["model"][i] = checkpoint_origin["model"][i]
-
-    custom_name = f"ckpt_{n}_{m}_{fac}"
-    torch.save(checkpoint_VL, "out/{custom_name}.pt")
-    return 1 
-
+    #custom_name = f"ckpt_{n}_{m}_{fac}"
+    #torch.save(checkpoint_VL, "out/{custom_name}.pt")
+    return checkpoint_VL["model"]
 
 
 #print(set(model.state_dict().keys())== set(checkpoint_VL["model"].keys()))

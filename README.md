@@ -20,30 +20,30 @@ Status: Initial code (seems like It) is working for MLP decomposition.
 
 **Update:** 
 
-I feel the small model with characters is so unreliable. I can literally get the model to do anything I want with more training. hence, I can't trust. I'll just switch all my focus on GPT2 124M model.
+I feel like the small model ( 10M with characters) is very unreliable. I can literally get the model to do anything I want with more training. I can't trust. I'll just switch all my focus on GPT2 124M model.
 
 * Optimizer:
 	* Optimizer need to be re-written.
 	* Need a way to split between, pre-trained weights and newly introduced ones. So we can log differences...
 
-* GPT 124M -- Init. work
+* GPT 124M -- Initial setup:
 	* Loading / Testing with multiple nodes.
-	* What is webtext? download / play with.
+	* What is webtext? download / play with. [DONE]
 	* Reproduing the loss // compare with original
-	* Other benchmarks. GLUE? 
-	* Decompose. And test all hypothesis.
 
-*  Q:
+* Write a end 2 end traning /eval framework:
+	* Add other benchmarks.
+	* time to embrace the power of HF
+
+* Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac*
+	* one script should run from terminal
+	* please fix the splitting asap, cfc and cproj should have opposite terms.
+
+*  Questions:
 	* Freezing the weights apparently helps, is there a way to quantify the impact?
 	* How the KP factos are changing with and without freezing of other wieghts?
 	* Some metric applied on the grads? 
-* Start working on GPT2. 
-	* reproduce the scroes from the paper on GLUE. >> should be a priority.
-	* Setup training with 3 nodes.
 
-* (As I suspected) when I freeze all the weights. And only train the new plugged in weights. 
-	* The network doesn't learn anything.
-	* Not really, optimized had a bug, now fixed. Freezing helps activating more.
 
 * change the behavior of optimizers, mainly the lr:	
 	* currently even the pre-trained params are set to the same lr as the other decomposed matrices. 
@@ -94,10 +94,16 @@ I feel the small model with characters is so unreliable. I can literally get the
 	* Try the Kronecker decompostion using the lib.
 
 * Clean repo, 
-	* remove unnecessary if/else for readablity.
+	* remove unnecessary if/else for readability.
+	* clean the TODO/DONE. only keep necessary stuff.
 
 
 ### **DONE**
+
+* (As I suspected) when I freeze all the weights. And only train the new plugged in weights. 
+	* The network doesn't learn anything. [Wrong]
+	* Plot twist: Not really, optimized had a bug, now fixed. Freezing helps activating more.
+	* But it's an interesting direction that I will tackle in the following iterations.
 
 * Write code for distilled initialization of KronyMLP [DONE]
 	* Initial code (random i\o) not working, **TRY**:
@@ -145,9 +151,14 @@ I feel the small model with characters is so unreliable. I can literally get the
 
 ### Ideas:	
 
-* distill KronyBlocks. one by one, and store the checkpoint.
+* Prefer to drop in decomposition 1 by 1, i.e., allow the model to adapt to the new structure, both during training and distillation.
+	* This thing for distillation is done.
+	* Implementing this for training is not easy (at least from a first try).
+	* Try: 
+	1. load two GPT krony and GPT, 
+	2. decompose them into nn.Module, similar to what you have done in distillation
+	3. each %k of iteration, make training flow in one layer
 
-* prefer to drop in decompostion 1 by 1, i.e., allow the model to adapt to the new stucture.
 
 * The mlp block takes considerable amount % of the total weights.:
 	* decompose them first, make it work.
@@ -163,9 +174,8 @@ I feel the small model with characters is so unreliable. I can literally get the
 ### Details
 
 * Repo structure now:
-	* `train.py`
-	* `model.py`
 	* my ckeckpoint with kronecker decomposition, is saved in as ckpt2.pt
 * I'm mostly using a single A100 80GB
 
-
+* **How to decompose and generate a new checkpoint**
+	* Completely handled by `kronDecomp.py` (change the name of  this file)
