@@ -1,50 +1,49 @@
 This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/) :goat:.
 
-### Goals: 
-1. Factorize single weight matrices into a product of Kroneckers.
-2. Test scaling of distillation / training.
-3. Test impact of adding multiple Kroneckers.
-4. Test if weights freezing has any significance to post-training or distillation.
+### ToC:
+* [Goals](#goals)
+* [Progress](#progress)
+* [TODO](#todo)
+* [DONE](#done)
+* [Misc](#misc)
+
 ---
-### Progress
+### Goals: <a name="goals">
+
+1. Factorize single weight matrices into a product of Kroneckers.
+2. Test scaling of distillation / training. With different strategies.
+3. Test impact of adding multiple Kroneckers factors.
+4. Test if weight freezing has any significance to post-training or distillation.
+
+---
+### **Progress**  <a name="progress">
 
 **Status:** I'm moving to GPT2 124M. 
 
-**Some reporting:**
-
+* [Link to pdf (soon)](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
 * [Link to wandb logs](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
-
-* Original nanoModel is 10.7M, Factorized model in 4.3M.
-* KD is slow? (not really), but  robust to overfitting.
-	* Q: Is it very robust or do the gradients get saturated? Hence, no updates? 
-
----
-### **TODO:**
 
 **Update:** 
 
-I feel like the small model ( 10M with characters) is very unreliable. I can literally get the model to do anything I want with more training. I can't trust. I'll just switch all my focus on GPT2 124M model.
+I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I can't trust. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
 
-* Optimizer:
-	* Optimizer need to be re-written.
+---
+### **TODO:** <a name="todo">
+
+* Write an end 2 end training / eval framework: (embrace the HF power.)
+	* what benchmarks are used in the paper? 
+	* reproduce the paper's results.
+
+* Optimizer: I need to be re-write it, because I intend to have different lr for diff group of variables.
 	* Need a way to split between, pre-trained weights and newly introduced ones. So we can log differences...
 
-* GPT 124M -- Initial setup:
-	* Loading / Testing with multiple nodes.
-	* What is webtext? download / play with. [DONE]
-	* Reproduing the loss // compare with original
-
-* Write a end 2 end traning /eval framework:
-	* Add other benchmarks.
-	* time to embrace the power of HF
-
-* Write code for multiple Kron Products factors:
+* Write code for multiple Kron Products factors:  [In Progress]
 	* you have to make it easier to **load** the state weights from outside.
 	* (Soon, I want to make it end2end decompose-traning-evaluate.)
 	* (the less interventions the better)
 
 * Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac* **[DONE]**
-	* one script should run from terminal
+	* one script should run from terminal to generate the ckpt
 	* please fix the splitting asap, cfc and cproj should have opposite terms.
 
 *  Questions:
@@ -57,18 +56,9 @@ I feel like the small model ( 10M with characters) is very unreliable. I can lit
 	* currently even the pre-trained params are set to the same lr as the other decomposed matrices. 
 	* doesn't seem right.
 
-* **Experiments that needs to be done:**
-1. Freeze then distill:
-	* All at once for 6k steps:
-	* 1 by 1 for 1k per layer:
-2. Freeze other pre-trained weights.
-	* i.e.:  only allow new weights to be trained to catch-up
+* **Experiments that needs to be done:** >> Please check the latex document. Sec X.X
 
-3. When you don't freeze the original weights, make them have a separate lr.
-	* the lack of details regarding this in papers is seriously mind boggling.
-
-
-* how can you monitor what is your network learning?
+* How can you monitor what is your network learning?
 	* we need some serious logging of the gradients. 
 	* start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
 
@@ -80,19 +70,10 @@ I feel like the small model ( 10M with characters) is very unreliable. I can lit
 	* this is  (potentially) a good point.. 
 	* Investigate this more.
 
-
 * In the distillation, have a quick/efficient way of:
 	* parameters loading.
 	* right now, I'm setting params manually
 	* this should be done auto, be a professional! it's better for long term dev.
-
-* bring back the DDP, as soon I'll use more than one node.
-
-* Add more KP factors // any links to MoE? Modularity?
-
-
-* I'm very sus. of gradients saturation, please see how you can monitor that asap.
-	* would torch profilers help?
 
 * Optimize compute 
 	* Still haven't used any KP props. But I doubt that it would help.
@@ -101,12 +82,21 @@ I feel like the small model ( 10M with characters) is very unreliable. I can lit
 	* different n / m for KroneckerDecom
 	* Try the Kronecker decompostion using the lib.
 
-* Clean repo, 
-	* remove unnecessary if/else for readability.
+* Clean this repo
+	* remove unnecessary if/else for readability
+	* bring back ddp, dumb ass.
 	* clean the TODO/DONE. only keep necessary stuff.
+	* e.g., add toc
+	* add a quick script on how to generate a new checkpoint from scratch.
+
+### **DONE**    <a name="done">
 
 
-### **DONE**
+* GPT 124M -- Initial setup:  [DONE]
+	* Loading / Testing with multiple nodes. [DONE]
+	* What is webtext? download / play with. [DONE]
+	* Reproduing the loss [DONE]
+	* compare with original [DONE]
 
 * (As I suspected) when I freeze all the weights. And only train the new plugged in weights. 
 	* The network doesn't learn anything. [Wrong]
@@ -157,6 +147,7 @@ I feel like the small model ( 10M with characters) is very unreliable. I can lit
 	* Is openWebText feasble? (It should be you got 4 A100 80BG)
 	* Conclusion: Not really, no need.
 
+<a name="misc">
 ### Ideas:	
 
 * Prefer to drop in decomposition 1 by 1, i.e., allow the model to adapt to the new structure, both during training and distillation.
@@ -178,7 +169,7 @@ I feel like the small model ( 10M with characters) is very unreliable. I can lit
 * Prune before decompositions (Why should this this should help, though)
 
 * Mixture of Experts as krone decomp? does it make sense?
- 
+
 ### Details
 
 * Repo structure now:

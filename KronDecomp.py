@@ -52,10 +52,12 @@ x =  torch.randn(500,500, device = device)
 _ = x@x
 ## GPU burned and happy.
 
-print(">>> Loading the ckpt")
-# automate this shit, from terminal 
-checkpoint_origin = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
 
+# loading:   both should happen from terminal.
+print(">>> Loading the ckpt and config")
+# automate this shit, from terminal 
+
+checkpoint_origin = torch.load('out-shakespeare-char/ckpt.pt', map_location=device)
 
 # fix this prefix shit for once and all.
 unwanted_prefix = '_orig_mod.'
@@ -69,16 +71,18 @@ for k,v in list(state_dict.items()):
 print(">>> Done")
 
 
-def kron_it(checkpoint, n: int, m: int, fac: int):
+def kron_it(checkpoint, config: dict, fac: int):
     """
-    n: first dim
-    m: second dim
-    fac: number of factors
+    conf should be written as follows:
+	config = {"cfc":[n,m], "cproj":[n,m]}
+    factors: number of factors
+
     TODO:
         * add checks / assert of dimension. 
         * have a manuel way of inputs from terminal, man be a professional
         * completely automate this shit.
     """
+
     # new checkpoint 
     checkpoint_VL = {i : checkpoint[i] for i in checkpoint if i!= "model"}
     checkpoint_VL["model"] = {}
@@ -90,49 +94,72 @@ def kron_it(checkpoint, n: int, m: int, fac: int):
         c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
         c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
 
+	# pop these two items cuz the y get copied eventually to the new ckpt
         # Perform kronecker decomposition and store the values in respective lists
 
 
         cfc_h = kronecker_decompose(
-            checkpoint_origin["model"][c_fc_key],
-            n,
-            m,
+            checkpoint["model"][c_fc_key],
+            config["c_fc"][0],
+            config["c_fc"][1],
             k = fac
         )
 
         cproj_h = kronecker_decompose(
-            checkpoint_origin["model"][c_proj_key],
-            m,
-            n,
+            checkpoint["model"][c_proj_key],
+            config["c_proj"][0],
+            config["c_proj"][1],
             k = fac
         )
         
         for f in range(fac):
             for k in range(2):
-                fc = f"transformer.h.{i}.mlp.c_fc_{f}.{k}"
-                proj = f"transformer.h.{i}.mlp.c_proj_{f}.{k}"
-                checkpoint_VL["model"][fc]   = cfc_h[k][f] # cfc[] cproj[] needs to change below 
-                checkpoint_VL["model"][proj] =  cproj_h[k][f]  # cfc[] cproj[] needs to change below 
-    # remove this cmt later            
-    #for i in nms_origin:
-    #        checkpoint_VL["model"][i] = checkpoint_origin["model"][i]
+                fc = f"transformer.h.{i}.mlp.c_fc_{f}_{k}"
+                proj = f"transformer.h.{i}.mlp.c_proj_{f}_{k}" 
+                checkpoint_VL["model"][fc]   = cfc_h[k][f]
+                checkpoint_VL["model"][proj] =  cproj_h[k][f] 
+
+    for i in nms_origin:
+	    if "c_fc" not in i and "c_proj" not in i:	
+	            checkpoint_VL["model"][i] = checkpoint["model"][i]
+
     #custom_name = f"ckpt_{n}_{m}_{fac}"
     #torch.save(checkpoint_VL, "out/{custom_name}.pt")
-    nms  = list(state_dict.keys())
-    h0 = [i for i in nms in "h.0.mlp.c_fc" in i]
 
-    s = 0 
+    return checkpoint_VL["model"]
 
-    for i in range(0, len(h0),2):
-        s += checkpoint_VL["model"][h0[i]], checkpoint_VL[h0[i+1]]
-
-    return   s
-
-
-cfc = state_dict["transformer.h.0.mlp.c_fc.weight"]
-#print(set(model.state_dict().keys())== set(checkpoint_VL["model"].keys()))
+def param(checkpoint, pn, layer):
+    """"
+	pn is so far either {"fc", "proj"}
+    """
+    return checkpoint["model"][f"transformer.h.{layer}.mlp.c_{pn}.weight"]
 
 
+conf = {"c_fc"   : [512,24], "c_proj" : [24,512]}
+
+# the decompostion becomes almost useless with more rank.. hence.
+# this could make a good small paragraph, Effectiveness of Van Loan
+# conclusion, no benefits whatsoever compared to Random init.
+
+new = kron_it(checkpoint_origin, conf, 4)
+
+def c(new, pn, layer):
+    h0 = [i for i in  list(new.keys()) if f"{layer}.mlp.c_{pn}" in i]
+    return torch.stack([torch.kron(new[h0[i]], new[h0[i+1]])  for i in range(0, len(h0),2)]).sum(dim=0)
 
 
+"""
+To generate a checkpoint:
 
+write a config:
+
+	config = { 
+		param_1 : [dim1, dim2],
+		...
+		param_N: [dim1, dim2]
+	}
+
+	pass it to kronDecompose python3 kronDecompose.py --origin="ckpt1.pt" --config=config_file
+
+	this will automatically generate a checkpoint for you. withe the tag ckpt_p
+"""

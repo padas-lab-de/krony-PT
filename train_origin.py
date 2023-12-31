@@ -34,7 +34,7 @@ from model_origin import GPTConfig, GPT
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
 
-if True:
+if True: # just hiding the visual. A wasted branch, I know.
     out_dir = 'out'
     eval_interval = 2000
     log_interval = 1
