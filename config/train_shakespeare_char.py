@@ -8,8 +8,6 @@ eval_iters = 20  # this one is used by estimate_loss(), usually set
 max_iters = 1000 
 lr_decay_iters = max_iters 
 
-
-
 log_interval = 10 
 # don't print too too often 
 # I usually don't look at it, I'm setting the eval_iters low.. 

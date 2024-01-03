@@ -20,18 +20,42 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 **Status:** I'm moving to GPT2 124M. 
 
+<!---
 * [Link to pdf (soon)](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
 * [Link to wandb logs](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
+--->
 
 **Update:** 
 
-I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I can't trust. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
+I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
+
+**Some remarks:** 
+
+* GPT2 takes approx 20GB of memory. 
+* Initial loss is 10.9886 10.9898. with random init.
+* HF checkpoint is 3.11 approx.
+	* this gets approx on Wikitest 103: 
+	* I'll keep GLUE for later, I'll focus on 
+
 
 ---
 ### **TODO:** <a name="todo">
 
+* Get the training curve for the new 3 inits, for a few iterations:
+	1. random
+	2. VL
+	3. the trick and see if it works
+	-- prune first. only (keep one of the two)
+
+
+* Get a 3 decompositions, target point is 85M (same or under DistilGPT)
+	* Decomposition 1 > 95M from $(3072, 768)$ to $(3072, 384)$
+	* Decomposition 2 > 
+	* Decomposition 3 > 
+
 * Write an end 2 end training / eval framework: (embrace the HF power.)
-	* what benchmarks are used in the paper? 
+	* what benchmarks are used in the paper, for eval? Lm and classification (sec. 4 of the paper)
+	* for classification > **GLUE** > for LM: **Wikitest-103**
 	* reproduce the paper's results.
 
 * Optimizer: I need to be re-write it, because I intend to have different lr for diff group of variables.
@@ -39,16 +63,16 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 
 * Write code for multiple Kron Products factors:  [In Progress]
 	* you have to make it easier to **load** the state weights from outside.
-	* (Soon, I want to make it end2end decompose-traning-evaluate.)
+	* (Soon, I want to make it end2end decompose-training-evaluate.)
 	* (the less interventions the better)
 
 * Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac* **[DONE]**
 	* one script should run from terminal to generate the ckpt
-	* please fix the splitting asap, cfc and cproj should have opposite terms.
+	* please fix the splitting asap, c_fc and c_proj should have opposite terms.
 
 *  Questions:
 	* Freezing the weights apparently helps, is there a way to quantify the impact?
-	* How the KP factos are changing with and without freezing of other wieghts?
+	* How the KP factors are changing with and without freezing of other weights?
 	* Some metric applied on the grads? 
 
 
@@ -62,7 +86,7 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 	* we need some serious logging of the gradients. 
 	* start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
 
-* Kronecker Decompostion is actually not the closest to W:
+* Kronecker Decomposition is actually not the closest to W:
 	* i.e., when I distill the student/teacher. the mse btw the original weights and KP weights actually gets bigger. this is kinda surprising, but it could make sense somehow.
 	* I should be able to  the val loss, if that one decreases while the mse increases, then that's fine.
 	* next: add grad accumulation (I doubt that It would help) 
@@ -80,7 +104,7 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 
 * More Experiment.
 	* different n / m for KroneckerDecom
-	* Try the Kronecker decompostion using the lib.
+	* Try the Kronecker decomposition using the lib.
 
 * Clean this repo
 	* remove unnecessary if/else for readability
@@ -95,8 +119,8 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 * GPT 124M -- Initial setup:  [DONE]
 	* Loading / Testing with multiple nodes. [DONE]
 	* What is webtext? download / play with. [DONE]
-	* Reproduing the loss [DONE]
-	* compare with original [DONE]
+	* Reproducing the loss [DONE]
+	* Compare with original [DONE]
 
 * (As I suspected) when I freeze all the weights. And only train the new plugged in weights. 
 	* The network doesn't learn anything. [Wrong]
@@ -116,7 +140,7 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 * Investigate the `torch._dynamo` error: [DONE]
 	* run the 5M mini-mini gpt [DONE]
 	* run the experiments without compiling the model, and see if there are any change to the outcome [DONE: works fine, I'll drop the /compile for now]
-	* Conclusion: remove `torch.compile()` // I also have not notived any difference in training speed.
+	* Conclusion: remove `torch.compile()` // I also have not noticed any difference in training speed.
 
 * Report using wandb, log everything. [DONE]
 
@@ -146,6 +170,12 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 	* You most likely need to pre-train the model, not just fine-tune
 	* Is openWebText feasble? (It should be you got 4 A100 80BG)
 	* Conclusion: Not really, no need.
+
+### Code:
+
+* Do not use torch compile.
+
+
 
 <a name="misc">
 ### Ideas:	
