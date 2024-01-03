@@ -44,8 +44,8 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 * Get the training curve for the new 3 inits, for a few iterations:
 	1. random
 	2. VL
-	3. the trick and see if it works
-	-- prune first. only (keep one of the two)
+	3. Simple prunning trick.
+	--> prune first. only (keep one of the two)
 
 
 * Get a 3 decompositions, target point is 85M (same or under DistilGPT)

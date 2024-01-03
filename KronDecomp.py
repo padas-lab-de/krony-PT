@@ -48,7 +48,6 @@ x =  torch.randn(10,10, device = device)
 _ = x@x
 print(">>> init 2")
 _ = x@x
-
 print(">>> Loading the ckpt")
 
 sd = torch.load('out/GPT2_3_11.pt', map_location=device)
@@ -56,8 +55,7 @@ nms_origin = list(sd.keys())
 
 def kron_it(checkpoint, config: dict, fac: int):
 	n_layer = 12      
-	checkpoint_VL = dict()
-	checkpoint_VL["model"] = dict()
+	new = dict()
 
 	for i in range(n_layer):
 		c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
@@ -77,30 +75,33 @@ def kron_it(checkpoint, config: dict, fac: int):
 			k = fac
 			)
 
+		nms_origin.remove(c_fc_key)
+		nms_origin.remove(c_proj_key)
+		nms_origin.remove(f"{c_fc_key[:-6]}bias")
+		nms_origin.remove(f"{c_proj_key[:-6]}bias")
+
 		for f in range(fac):
 			for k in range(2):
 				fc = f"transformer.h.{i}.mlp.c_fc_{f}_{k}"
 				proj = f"transformer.h.{i}.mlp.c_proj_{f}_{k}" 
-				checkpoint_VL["model"][fc]   = cfc_h[k][f]
-				checkpoint_VL["model"][proj] =  cproj_h[k][f] 
+				new[fc]   = cfc_h[k][f]
+				new[proj] =  cproj_h[k][f] 
 
-		nms = list(checkpoint_VL["model"].keys())
-
-		for w in nms_origin:
-			if w not in nms:
-				checkpoint_VL["model"][w] = checkpoint[w]
-
-		#custom_name = f"ckpt_{n}_{m}_{fac}"
-		#torch.save(checkpoint_VL, "out/{custom_name}.pt")
-
-	return checkpoint_VL["model"]
+	return new
 
 
 
 conf = {"fc"   : (3072,384), "proj" : (384, 3072)}
 sd_VL1 = kron_it(sd, conf, 1)
+nms =  list(sd_VL1.keys())
 
-torch.save(sd_VL1, "out/GPT2_VL1.pt")
+for w in nms_origin:
+	if w not in nms:
+		sd_VL1[w] = sd[w]
+
+
+
+#torch.save(sd_VL1, "out/GPT2_VL11.pt")
 
 # the decompostion becomes almost useless with more rank.. hence.
 # this could make a good small paragraph, Effectiveness of Van Loan
@@ -144,6 +145,5 @@ param_1 : [dim1, dim2],
 		}
 
 pass it to kronDecompose python3 kronDecompose.py --origin="ckpt1.pt" --config=config_file
-
 this will automatically generate a checkpoint for you. withe the tag ckpt_p
 """

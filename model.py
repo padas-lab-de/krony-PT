@@ -99,28 +99,29 @@ class KronyMLP(nn.Module):
         super().__init__()
         # 48*32  ////  32*12
         self.factors = config.factors
+        #self.dim = config.dim
 
         # see if you later have a super parameter as torch.stack().. TODO
 
         for f in range(config.factors): # each f is one factor 
             #for i in range(1,3):  # W_1 x W_2
-            setattr(self, f"c_fc_{f}_1"  , nn.Parameter(torch.normal(0, 0.02, size=(48,32))))
-            setattr(self, f"c_proj_{f}_1",   nn.Parameter(torch.normal(0, 0.02, size=(32,12))))
-            setattr(self, f"c_fc_{f}_2"  , nn.Parameter(torch.normal(0, 0.02, size=(32,12))))
-            setattr(self, f"c_proj_{f}_2",   nn.Parameter(torch.normal(0, 0.02, size=(12,32))))
+            setattr(self, f"c_fc_{f}_0"  , nn.Parameter(torch.normal(0, 0.02, size=(3072,384))))
+            setattr(self, f"c_proj_{f}_0",   nn.Parameter(torch.normal(0, 0.02, size=(384,3072))))
+            setattr(self, f"c_fc_{f}_1"  , nn.Parameter(torch.normal(0, 0.02, size=(1,2))))
+            setattr(self, f"c_proj_{f}_1",   nn.Parameter(torch.normal(0, 0.02, size=(2,1))))
 
         self.gelu    = nn.GELU()
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
         s_cfc =  [
-            torch.kron(getattr(self, f"c_fc_{f}_1"), getattr(self, f"c_fc_{f}_2"))
+            torch.kron(getattr(self, f"c_fc_{f}_0"), getattr(self, f"c_fc_{f}_1"))
             for f in range(self.factors)
         ]
         x = x @ torch.sum(s_cfc)
         x = self.gelu(x)
         s_cproj =  [
-            torch.kron(getattr(self, f"c_proj_{f}_1"), getattr(self, f"c_proj_{f}_2"))
+            torch.kron(getattr(self, f"c_proj_{f}_0"), getattr(self, f"c_proj_{f}_1"))
             for f in range(self.factors)
         ]
         x = x @ torch.sum(s_cproj)
@@ -142,7 +143,7 @@ class KronyBlock(nn.Module):
         return x
 
 @dataclass
-class GPTConfig:
+class KronyGPTConfig:
     block_size: int = 1024
     vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
     n_layer: int = 12
@@ -150,10 +151,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
-    factors: int = 3 
-    dim = [32, 32] # made it a list to faciliate implementation inside KronyMLP
-    # think of a better way of handling this
-
+    factors: int = 1
 
 class KronyGPT(nn.Module):
 
@@ -274,7 +272,7 @@ class KronyGPT(nn.Module):
             print(f"overriding dropout rate to {override_args['dropout']}")
             config_args['dropout'] = override_args['dropout']
         # create a from-scratch initialized minGPT model
-        config = GPTConfig(**config_args)
+        config = KronyGPTConfig(**config_args)
         model = (config)
         sd = model.state_dict()
         sd_keys = sd.keys()

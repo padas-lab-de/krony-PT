@@ -3,47 +3,87 @@ import torch
 import torch.nn as nn
 
 from torch.nn import functional as F
-from model_origin import *
 from transformers import GPT2LMHeadModel
 
-# this module has some utils functions, load the config, just to ease visual.
-# TODO: this should be properly managed later.
-from use import *
+from model_origin import *
+from model import *
 
-# model init using our configs.
-config = GPTConfig(**config_args)
-model = GPT(config)
+# TRY to keep this script self-contained > testing different setting for init.
+
+if True:
+    # put some vars here.
+    config_args = dict(
+        n_layer=12, 
+        n_head=12, 
+        n_embd=768,
+        vocab_size = 50257,
+        block_size = 1024,
+        bias = True,
+    )
+
+    block_size = config_args["block_size"]
+    device = "cuda"
+    device_type = "cuda"
+    eval_iters = 200
 
 
+
+if True: # data loader here AND estimate loss.
+    path = 'data/openwebtext/'
+    train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
+    val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
+
+    batch_size = 12
+    def get_batch(split):
+        data = train_data if split == 'train' else val_data
+        ix = torch.randint(len(data) - block_size, (batch_size,))
+        x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
+        y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+        return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+
+    @torch.no_grad()
+    def estimate_loss(model):
+        out = {}
+        model.eval()
+        for split in ['train', 'val']:
+            losses = torch.zeros(eval_iters)
+            for k in range(eval_iters):
+                X, Y = get_batch(split)
+                with ctx:
+                    logits, loss = model(X, Y)
+                losses[k] = loss.item()
+            out[split] = losses.mean()
+        model.train()
+        return out
+
+
+# Case 1: Normy GPT
+conf = GPTConfig(**config_args)
+NormyGPT = GPT(conf)
+
+# loading the checkpoints
 checkpoint = torch.load("out/GPT2_3_11.pt")
-model.load_state_dict(checkpoint)\
-
-print("G shit only")
-
-
+NormyGPT.load_state_dict(checkpoint)
 
 ctx =  torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
-model.to(device)
 
+# Normy Loss.
+NormyGPT.to(device)
+print(f"Loss for NormyGPT is {estimate_loss(NormyGPT)}")
 
+# Case 2:  Kronecker & VL init.
+print("KronyGPT with VL init:")
+sd = torch.load("out/testV.pt")
 
+kronyConf = KronyGPTConfig(**config_args)
+KronyGPT = KronyGPT(kronyConf)
+KronyGPT.load_state_dict(sd)
 
-print("Loss being computed!")
-print(estimate_loss())
+KronyGPT.to(device)
+print(f"Loss for KronyGPT with VL init is {estimate_loss(NormyGPT)}")
 
-# Now I want to evaluate this model on wikitest-103.
-# Now I want the perplexity.
-# TODO: same for a distilGPT.
-
-
-
-# different KP dimensions:
-
-
-
-
-
-
+# GPT2 with Kronecker & Random init
+# GPT2 with Kronecker & simple 1/2 prunning init
 
 
 
