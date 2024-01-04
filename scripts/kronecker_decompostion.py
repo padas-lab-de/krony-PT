@@ -1,3 +1,16 @@
+"""
+This script:
+1. Loads the GPT2 checkpoints from HF (that are already stored localy)
+2. Decomposes the weights using the Van Loan method.
+3. Creates a new state dict that matches the KronyGPT state dict
+4. Saves the checkpoint in out/
+
+
+To play with it:
+change the **conf** dict to your liking.
+
+"""
+
 import torch
 from einops import rearrange
 from typing import Tuple
@@ -43,18 +56,15 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
 
 device = torch.device("cuda")
 
-print(">>> GPU init")
-x =  torch.randn(10,10, device = device)
-_ = x@x
-print(">>> init 2")
-_ = x@x
-print(">>> Loading the ckpt")
+# loadign ckpt
+print("loading ckpt")
 
-sd = torch.load('out/GPT2_3_11.pt', map_location=device)
+sd = torch.load('../out/GPT2.pt', map_location=device)
 nms_origin = list(sd.keys())
 
-def kron_it(checkpoint, config: dict, fac: int):
+def kron_it(checkpoint, config: dict):
 	n_layer = 12      
+	fac = config["n_factors"]
 	new = dict()
 
 	for i in range(n_layer):
@@ -75,6 +85,7 @@ def kron_it(checkpoint, config: dict, fac: int):
 			k = fac
 			)
 
+		# cleaning the original checkpoint.
 		nms_origin.remove(c_fc_key)
 		nms_origin.remove(c_proj_key)
 		nms_origin.remove(f"{c_fc_key[:-6]}bias")
@@ -90,9 +101,15 @@ def kron_it(checkpoint, config: dict, fac: int):
 	return new
 
 
+# change here 
+conf = {"fc"   : (3072,384), 
+		"proj" : (384, 3072),
+		"n_factors" : 1
+}
 
-conf = {"fc"   : (3072,384), "proj" : (384, 3072)}
-sd_VL1 = kron_it(sd, conf, 1)
+print("Decomposing")
+
+sd_VL1 = kron_it(sd, conf)
 nms =  list(sd_VL1.keys())
 
 for w in nms_origin:
@@ -100,12 +117,9 @@ for w in nms_origin:
 		sd_VL1[w] = sd[w]
 
 
+print("saving!")
+torch.save(sd_VL1, "../out/GPT2_VL11.pt")
 
-#torch.save(sd_VL1, "out/GPT2_VL11.pt")
-
-# the decompostion becomes almost useless with more rank.. hence.
-# this could make a good small paragraph, Effectiveness of Van Loan
-# conclusion, no benefits whatsoever compared to Random init.
 
 """
 nms = list(sd.keys())

@@ -1,3 +1,10 @@
+"""
+Evaluation of KronyGPT with 3 initializations:
+1. Van Loan.
+2. Random.
+3. MaxPooling with tricky trick.
+"""
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -59,28 +66,28 @@ if True: # data loader here AND estimate loss.
 
 # Case 1: Normy GPT
 conf = GPTConfig(**config_args)
-NormyGPT = GPT(conf)
+normy_gpt = GPT(conf)
 
 # loading the checkpoints
-checkpoint = torch.load("out/GPT2_3_11.pt")
-NormyGPT.load_state_dict(checkpoint)
+checkpoint = torch.load("out/GPT2.pt")
+normy_gpt.load_state_dict(checkpoint)
 
 ctx =  torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
 
 # Normy Loss.
-NormyGPT.to(device)
-print(f"Loss for NormyGPT is {estimate_loss(NormyGPT)}")
+normy_gpt.to(device)
+print(f"Loss for NormyGPT is {estimate_loss(normy_gpt)}")
 
 # Case 2:  Kronecker & VL init.
 print("KronyGPT with VL init:")
-sd = torch.load("out/testV.pt")
+sd = torch.load("out/GPT2_VL11.pt")
 
-kronyConf = KronyGPTConfig(**config_args)
-KronyGPT = KronyGPT(kronyConf)
-KronyGPT.load_state_dict(sd)
+krony_conf = KronyGPTConfig(**config_args)
+krony_gpt = KronyGPT(krony_conf)
+krony_gpt.load_state_dict(sd)
 
-KronyGPT.to(device)
-print(f"Loss for KronyGPT with VL init is {estimate_loss(NormyGPT)}")
+krony_gpt.to(device)
+print(f"Loss for KronyGPT with VL init is {estimate_loss(krony_gpt)}")
 
 # GPT2 with Kronecker & Random init
 # GPT2 with Kronecker & simple 1/2 prunning init

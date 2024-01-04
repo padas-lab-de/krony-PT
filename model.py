@@ -118,13 +118,13 @@ class KronyMLP(nn.Module):
             torch.kron(getattr(self, f"c_fc_{f}_0"), getattr(self, f"c_fc_{f}_1"))
             for f in range(self.factors)
         ]
-        x = x @ torch.sum(s_cfc)
+        x = x @ torch.stack(s_cfc).sum(dim=0).T
         x = self.gelu(x)
         s_cproj =  [
             torch.kron(getattr(self, f"c_proj_{f}_0"), getattr(self, f"c_proj_{f}_1"))
             for f in range(self.factors)
         ]
-        x = x @ torch.sum(s_cproj)
+        x = x @ torch.stack(s_cproj).sum(dim=0).T
         x = self.dropout(x)
         return x
 
