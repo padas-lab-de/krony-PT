@@ -35,10 +35,12 @@ def init(sd, n_layer: int):
 				new[fc]   = cfc_h
 				new[proj] = cproj_h
 			else:
-				new[fc]   =  torch.tensor([0,1]).to(device)
+				new[fc]   =  torch.tensor([[0,1]]).to(device)
 				new[proj] =  torch.tensor([[0],[1]]).to(device)
 	return new
 
+
+"""
 new = init(sd, 12)
 nms = list(new.keys())
 
@@ -49,9 +51,47 @@ for w in nms_origin:
 print("saving!")
 torch.save(new, "../out/GPT2_prune_init.pt")
 
+"""
+new = dict()
+n_layer = 12
+
+for i in range(n_layer):
+	print(f"Processing layer {i}")
+
+	c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
+
+	# cleaning the original checkpoint.
+	nms_origin.remove(c_fc_key)
+	nms_origin.remove(c_proj_key)
+	nms_origin.remove(f"{c_fc_key[:-6]}bias")
+	nms_origin.remove(f"{c_proj_key[:-6]}bias")
+
+	for k in range(2):
+		fc = f"transformer.h.{i}.mlp.c_fc_{0}_{k}"
+		proj = f"transformer.h.{i}.mlp.c_proj_{0}_{k}" 
+		if k == 0:
+			new[fc]   =  torch.normal(0, 0.02, size=(3072,384))
+			new[proj] =  torch.normal(0, 0.02, size=(384,3072))
+		else:
+			new[fc]   =   torch.normal(0, 0.02, size=(1,2))  
+			new[proj] =   torch.normal(0, 0.02, size=(2,1))
+
+
+nms = list(new.keys())
+
+for w in nms_origin:
+	if w not in nms:
+		new[w] = sd[w]
+
+print("saving!")
+torch.save(new, "../out/GPT2_rand_KP_init.pt")
+
+
 
 """
 # some testing cuz why not
+
 def showme(i)  :
 	cfc = f"transformer.h.{i}.mlp.c_fc.weight"
 	cproj = f"transformer.h.{i}.mlp.c_proj.weight"

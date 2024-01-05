@@ -10,6 +10,8 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ---
 ### Goals: <a name="goals">
 
+Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 steps. (starting from hf checkpoint).
+
 1. Factorize single weight matrices into a product of Kroneckers.
 2. Test scaling of distillation / training. With different strategies.
 3. Test impact of adding multiple Kroneckers factors.
@@ -20,9 +22,10 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 **Status:** I'm moving to GPT2 124M. 
 
+* [Link to wandb logs](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub1://wandb.ai/benayad7/freezing-test/workspace?workspace=user-benayad7)
+
 <!---
 * [Link to pdf (soon)](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
-* [Link to wandb logs](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
 --->
 
 **Update:** 

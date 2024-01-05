@@ -73,7 +73,7 @@ if True:
     device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
     dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
     compile = True # use PyTorch 2.0 to compile the model to be faster
-    # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
@@ -151,10 +151,6 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
                   bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
 
 
-## some sloppy/quick changes:
-max_iters = 500
-eval_interval = 50
-iter_num = 0
 
 
 ## params loading scratch / resume of gpt2
@@ -168,10 +164,36 @@ if init_from == 'scratch':
     gptconf = KronyGPTConfig(**model_args)
     model = KronyGPT(gptconf)
 
-elif init_from == 'resume':
+
+elif init_from == 'prune':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'GPT2_VL11.pt')
+    ckpt_path = os.path.join(out_dir, 'GPT2_prune_init.pt')
+    checkpoint = torch.load(ckpt_path, map_location=device)
+
+    # the checkpoints I'm saving are only weights. I might change this behavior later.
+    #checkpoint_model_args = checkpoint['model_args']
+    #for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
+    #    model_args[k] = checkpoint_model_args[k]
+
+    # create the model
+    model_args['vocab_size'] = 50257
+    model_args['bias'] = True
+
+    print(f">>> For completeness I'm setting {model_args}")
+
+    gptconf = KronyGPTConfig(**model_args)
+    model = KronyGPT(gptconf)
+    #state_dict = checkpoint['model']
+    #model.load_state_dict(state_dict)
+
+    model.load_state_dict(checkpoint)
+
+    #best_val_loss = checkpoint['best_val_loss']
+elif init_from == 'VL':
+    print(f"Resuming training from {out_dir}")
+    # resume training from a checkpoint.
+    ckpt_path = os.path.join(out_dir, 'GPT2_rand_KP_init.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
 
     # the checkpoints I'm saving are only weights. I might change this behavior later.
@@ -269,6 +291,7 @@ t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
 
 #raw_model = model.module if ddp else model # unwrap DDP container if needed
+
 raw_model = model # unwrap DDP container if needed
 
 running_mfu = -1.0
@@ -320,7 +343,6 @@ while True:
         # new batch
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
-        print(f"step {iter_num}:  loss {loss:.4f}")
         scaler.scale(loss).backward()
     # clip the gradient
     if grad_clip != 0.0:
@@ -343,7 +365,7 @@ while True:
         if local_iter_num >= 5: # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        #print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
 

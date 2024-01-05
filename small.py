@@ -81,11 +81,13 @@ print(f"Loss for NormyGPT is {estimate_loss(normy_gpt)}")
 # Case 2:  Kronecker & VL init.
 print("KronyGPT with VL init:")
 sd = torch.load("out/GPT2_VL11.pt")
+print(">> Loading DONE")
 
+# this would would be the same for all.
 krony_conf = KronyGPTConfig(**config_args)
+
 krony_gpt = KronyGPT(krony_conf)
 krony_gpt.load_state_dict(sd)
-
 krony_gpt.to(device)
 print(f"Loss for KronyGPT with VL init is {estimate_loss(krony_gpt)}")
 
@@ -96,6 +98,16 @@ print(f"Loss for KronyGPT with VL init is {estimate_loss(krony_gpt)}")
 
 
 # GPT2 with Kronecker & simple 1/2 prunning init
+print("Loading KronyGPT with prune 1/2 init:")
+sd_prune = torch.load("out/GPT2_prune_init.pt")
+print(">> Loading DONE")
+
+
+
+krony_gpt_prune = KronyGPT(krony_conf)
+krony_gpt_prune.load_state_dict(sd_prune)
+krony_gpt_prune.to(device)
+print(f"Loss for KronyGPT with prune 1/2 init {estimate_loss(krony_gpt_prune)}")
 
 
 

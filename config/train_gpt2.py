@@ -4,8 +4,9 @@
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
 wandb_log = True
-wandb_project = 'owt'
-wandb_run_name='gpt2-124M'
+wandb_project = 'freezing-test'
+wandb_run_name='gpt2-rand-KP-only-no-freezing'
+
 
 # these make the total batch size be ~0.5M
 # 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
@@ -14,13 +15,15 @@ block_size = 1024
 gradient_accumulation_steps = 5 * 8
 
 # this makes total number of tokens be 300B
-max_iters = 600000
-lr_decay_iters = 600000
+max_iters = 300
+lr_decay_iters = 300
 
 # eval stuff
-eval_interval = 1000
-eval_iters = 200
-log_interval = 10
+
+eval_interval = 10   #was 1000 this one is for traning loging and loggin to wandb
+
+eval_iters = 50      #was 200 this one is for inside estimate_loss
+log_interval = 5
 
 # weight decay
 weight_decay = 1e-1
