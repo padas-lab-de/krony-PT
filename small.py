@@ -90,6 +90,11 @@ krony_gpt.to(device)
 print(f"Loss for KronyGPT with VL init is {estimate_loss(krony_gpt)}")
 
 # GPT2 with Kronecker & Random init
+
+# write custom code for inits
+# write custom code for lr
+
+
 # GPT2 with Kronecker & simple 1/2 prunning init
 
 
