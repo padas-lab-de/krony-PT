@@ -15,8 +15,6 @@ $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=0 --master_addr=123.456.123
 $ torchrun --nproc_per_node=8 --nnodes=2 --node_rank=1 --master_addr=123.456.123.456 --master_port=1234 train.py
 (If your cluster does not have Infiniband interconnect prepend NCCL_IB_DISABLE=1)
 """
-
-
 import os
 import time
 import math
@@ -64,12 +62,10 @@ if True: # just hiding the visual. A wasted branch, I know.
     beta1 = 0.9
     beta2 = 0.95
     grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
-    # learning rate decay settings
     decay_lr = True # whether to decay the learning rate
     warmup_iters = 2000 # how many steps to warm up for
     lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
     min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
-
     # DDP settings
     backend = 'nccl' # 'nccl', 'gloo', etc.
     # system
@@ -77,14 +73,11 @@ if True: # just hiding the visual. A wasted branch, I know.
     dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
     compile = False# use PyTorch 2.0 to compile the model to be faster
 
-    # -----------------------------------------------------------------------------
     config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
     exec(open('configurator.py').read()) # overrides from command line or config file
     config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
-    # -----------------------------------------------------------------------------
 
-# various inits, derived attributes, I/O setup
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if ddp:
     init_process_group(backend=backend)
@@ -116,9 +109,9 @@ torch.manual_seed(1337 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
-device_type = 'cuda' # if 'cuda' in device else 'cpu' # for later use in torch.autocast
-
+device_type = 'cuda' 
 # note: float16 data type will automatically use a GradScaler
+
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
 ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
@@ -177,7 +170,6 @@ elif init_from == 'resume':
     state_dict = checkpoint['model']
     model.load_state_dict(state_dict)
     best_val_loss = checkpoint['best_val_loss']
-
 elif init_from.startswith('gpt2'):
     print(f"Initializing from OpenAI GPT-2 weights: {init_from}")
     # initialize from OpenAI GPT-2 weights
@@ -194,9 +186,8 @@ model.to(device)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
-
-# optimizer
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+
 #if init_from == 'resume':
 #    optimizer.load_state_dict(checkpoint['optimizer'])
 checkpoint = None # free up memory
@@ -254,6 +245,9 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
+
+
+
 while True:
     
     # determine and set the learning rate for this iteration
@@ -309,10 +303,9 @@ while True:
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
-    # step the optimizer and scaler if training in fp16
+
     scaler.step(optimizer)
     scaler.update()
-    # flush the gradients as soon as we can, no need for this memory anymore
     optimizer.zero_grad(set_to_none=True)
 
     # timing and logging
@@ -336,3 +329,4 @@ while True:
 
 if ddp:
     destroy_process_group()
+

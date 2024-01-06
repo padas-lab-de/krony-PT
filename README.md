@@ -40,38 +40,27 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 	* this gets approx on Wikitest 103: 
 	* I'll keep GLUE for later, I'll focus on 
 
-
 ---
 ### **TODO:** <a name="todo">
 
-* Get the training curve for the new 3 inits, for a few iterations:
-	1. random
-	2. VL
-	3. Simple prunning trick. 
-	--> prune first. only (keep one of the two)
 
+* Should take priority now: **Optimizer**: I need to be re-write it, because I intend to have different lr for diff group of variables.
+	* Need a way to split between, pre-trained weights and newly introduced ones. So we can log differences...
 
-* Get a 3 decompositions, target point is 85M (same or under DistilGPT)
-	* Decomposition 1 > 95M from $(3072, 768)$ to $(3072, 384)$
+* Write results on freezing on tex file.
+
+* Write code for 1 by 1 training:
+	* form the highest level to the lowest and vice versa.
+	* Log results.
+	* Write.
+
+* Run code for 1 by 1 distillation.
+
+* Get a 3 decompositions, target point is **85M** (same or under DistilGPT)
+	* Decomposition 1 > 95M from $(3072, 768)$ to $(3072, 384)$  [DONE]
 	* Decomposition 2 > 
 	* Decomposition 3 > 
 
-* Write an end 2 end training / eval framework: (embrace the HF power.)
-	* what benchmarks are used in the paper, for eval? Lm and classification (sec. 4 of the paper)
-	* for classification > **GLUE** > for LM: **Wikitest-103**
-	* reproduce the paper's results.
-
-* Optimizer: I need to be re-write it, because I intend to have different lr for diff group of variables.
-	* Need a way to split between, pre-trained weights and newly introduced ones. So we can log differences...
-
-* Write code for multiple Kron Products factors:  [In Progress]
-	* you have to make it easier to **load** the state weights from outside.
-	* (Soon, I want to make it end2end decompose-training-evaluate.)
-	* (the less interventions the better)
-
-* Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac* **[DONE]**
-	* one script should run from terminal to generate the ckpt
-	* please fix the splitting asap, c_fc and c_proj should have opposite terms.
 
 *  Questions:
 	* Freezing the weights apparently helps, is there a way to quantify the impact?
@@ -86,16 +75,14 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 * **Experiments that needs to be done:** >> Please check the latex document. Sec X.X
 
 * How can you monitor what is your network learning?
-	* we need some serious logging of the gradients. 
+	* we need some logging of the gradient / activation maps (I think they're called attention maps, not to be confused with attention blocks of the transformer).
 	* start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
 
 * Kronecker Decomposition is actually not the closest to W:
 	* i.e., when I distill the student/teacher. the mse btw the original weights and KP weights actually gets bigger. this is kinda surprising, but it could make sense somehow.
-	* I should be able to  the val loss, if that one decreases while the mse increases, then that's fine.
-	* next: add grad accumulation (I doubt that It would help) 
-	* also add grad-clipping
-	* this is  (potentially) a good point.. 
-	* Investigate this more.
+	* next: add grad accumulation (I doubt that It would help) [DONE], true, didn't help.
+	* also add grad-clipping [DONE]
+	* Investigate this more. [DONE]
 
 * In the distillation, have a quick/efficient way of:
 	* parameters loading.
@@ -118,6 +105,25 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 
 ### **DONE**    <a name="done">
 
+* Test Freezing, for Rand, VL and Prune initialization. [DONE]
+	* Test mixed strategies: (Freeze / Release) x Repeat.
+
+* Fix distributed testing. **ddp** (you shouldn't have deleted dumb ass) [DONE] (but not working, most likely a mem. issue)
+	* Need to able to run on two nodes, today, better, yesterday!
+
+* Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac* **[DONE]**
+	* one script should run from terminal to generate the ckpt
+	* please fix the splitting asap, c_fc and c_proj should have opposite terms.
+
+* Write code for multiple Kron Products factors:  [DONE]
+	* you have to make it easier to **load** the state weights from outside.
+	* (Soon, I want to make it end2end decompose-training-evaluate.)
+
+* Get the training curve for the new 3 inits, for a few iterations: [DONE]
+	1. random
+	2. VL
+	3. Simple prunning trick. 
+	--> prune first. only (keep one of the two)
 
 * GPT 124M -- Initial setup:  [DONE]
 	* Loading / Testing with multiple nodes. [DONE]

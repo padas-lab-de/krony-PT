@@ -3,9 +3,9 @@
 # launch as the following (e.g. in a screen session) and wait ~5 days:
 # $ torchrun --standalone --nproc_per_node=8 train.py config/train_gpt2.py
 
-wandb_log = True
+wandb_log = True 
 wandb_project = 'freezing-test'
-wandb_run_name='gpt2-rand-KP-only-no-freezing'
+wandb_run_name='gpt2-prune-alterante-freezing'
 
 
 # these make the total batch size be ~0.5M

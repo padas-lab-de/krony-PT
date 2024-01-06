@@ -62,6 +62,7 @@ for i in range(n_layer):
 	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
 
 	# cleaning the original checkpoint.
+
 	nms_origin.remove(c_fc_key)
 	nms_origin.remove(c_proj_key)
 	nms_origin.remove(f"{c_fc_key[:-6]}bias")

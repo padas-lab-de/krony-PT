@@ -29,36 +29,69 @@ from torch.distributed import init_process_group, destroy_process_group
 import torch.nn.functional as F
 
 from model_origin import GPT, GPTConfig
-from model import KronyGPT
-from config.train_shakespeare_char import *
-
+from model import KronyGPT, KronyGPTConfig
 
 import wandb
 
-device = 'cuda'
-device_type = 'cuda'
-dtype = 'bfloat16'   # what is the diff between bfloat16 and float16?
-compile = True
 
-config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
+if True:
+    out_dir = 'out'
+    eval_interval = 2000
+    log_interval = 1
+    eval_iters = 200
+    eval_only = False # if True, script exits right after the first eval
+    always_save_checkpoint = True # if True, always save a checkpoint after each eval
+    init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
+    # wandb logging
+    wandb_log = False # disabled by default
+    wandb_project = 'owt'
+    wandb_run_name = 'gpt2' # 'run' + str(time.time())
+    # data
+    dataset = 'openwebtext'
+    gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
+    batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
+    block_size = 1024
+    # model
+    n_layer = 12
+    n_head = 12
+    n_embd = 768
+    dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
+    bias = False # do we use bias inside LayerNorm and Linear layers?
+    # adamw optimizer
+    learning_rate = 6e-4 # max learning rate
+    max_iters = 600000 # total number of training iterations
+    weight_decay = 1e-1
+    beta1 = 0.9
+    beta2 = 0.95
+    grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
+    decay_lr = True # whether to decay the learning rate
+    warmup_iters = 2000 # how many steps to warm up for
+    lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
+    min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
+    # DDP settings
+    backend = 'nccl' # 'nccl', 'gloo', etc.
+    # system
+    device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+    dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
+    compile = True # use PyTorch 2.0 to compile the model to be faster
 
-exec(open('configurator.py').read()) # overrides from command line or config file
-config = {k: globals()[k] for k in config_keys} # will be useful for logging
+    config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
+    exec(open('configurator.py').read()) # overrides from command line or config file
+    config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
-master_process = True
-seed_offset = 0
-ddp_world_size = 1
+    master_process = True
+    seed_offset = 0
+    ddp_world_size = 1
+
+    torch.manual_seed(1337 + seed_offset)
+    torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+    torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+
+    device_type = "cuda"
+    ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+    ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 
-torch.manual_seed(1337 + seed_offset)
-torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
-torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-
-ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
-
-
-# poor man's data loader
 data_dir =   'data/shakespeare_char'
 
 train_data = np.memmap(f"{data_dir}/train.bin", dtype=np.uint16, mode='r')
@@ -120,16 +153,44 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
 
-# when you make it work, then fucking log this shit here log this shit here
-#if wandb_log and master_process:
-#    import wandb
-#    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+if wandb_log and master_process:
+    import wandb
+    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
+
+model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
+                  bias=bias, vocab_size=None, dropout=dropout)
+
+model_args['vocab_size'] =  50304
+model_args['bias'] = True
+
+### Case 1: Normy GPT
+conf = GPTConfig(**model_args)
+normy_gpt = GPT(conf)
+
+### Loading The Checkpoints
+checkpoint = torch.load("out/GPT2.pt")
+normy_gpt.load_state_dict(checkpoint)
+
+
+## Normy Loss
+normy_gpt.to(device)
+print(f"Loss for NormyGPT is {estimate_loss(normy_gpt)}")
+
+# Case 2:  Kronecker & VL init.
+print("KronyGPT with VL init:")
+sd = torch.load("out/GPT2_VL11.pt")
+print(">> Loading DONE")
+
+# this would would be the same for all.
+krony_conf = KronyGPTConfig(**model_args)
+krony_gpt = KronyGPT(krony_conf)
+krony_gpt.load_state_dict(sd)
+krony_gpt.to(device)
 
 
 # GPT conf for both teacher and student net
-ckpt_path = 'out-shakespeare-char/ckpt.pt'
-checkpoint = torch.load(ckpt_path, map_location=device)
+checkpoint = torch.load(' ', map_location=device)
 checkpoint_model_args = checkpoint['model_args']
 
 
@@ -138,25 +199,26 @@ model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=bloc
 for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
         model_args[k] = checkpoint_model_args[k]
 
+# Teacher: Loading
 block_size = model_args["block_size"]
 gptconf = GPTConfig(**model_args)
-
-# Loading the teacher:]
-
 teacher = GPT(gptconf)
 state_dict = checkpoint['model']
 
-unwanted_prefix = '_orig_mod.'
-for k,v in list(state_dict.items()):
-    if k.startswith(unwanted_prefix):
-        state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
-
 teacher.load_state_dict(state_dict)
 
+# Teacher: layering down
 
+teacher_wte = teacher.transformer.wte
+teacher_wpe = teacher.transformer.wpe
+teacher_drop = teacher.transformer.drop
+teacher_h = teacher.transformer.h
+teacher_ln_f = teacher.transformer.ln_f
+teacher_lm_head = teacher.lm_head
+
+# Teacher: Freezing the weights
 
 # Loading the student:
-
 ckpt_path_VL = 'out-shakespeare-char/ckpt_VL.pt'
 checkpoint_VL = torch.load(ckpt_path_VL, map_location=device)
 
@@ -177,14 +239,7 @@ print(f"loading the homies to(device) ")
 student.to(device)
 teacher.to(device)
 
-### I need to layer down all layers so I have more control when iterating:
 ###  teacher:
-teacher_wte = teacher.transformer.wte
-teacher_wpe = teacher.transformer.wpe
-teacher_drop = teacher.transformer.drop
-teacher_h = teacher.transformer.h
-teacher_ln_f = teacher.transformer.ln_f
-teacher_lm_head = teacher.lm_head
 
 ###  student:
 student_wte = student.transformer.wte
