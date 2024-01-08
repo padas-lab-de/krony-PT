@@ -20,8 +20,7 @@ lr_decay_iters = 300
 
 # eval stuff
 
-eval_interval = 10   #was 1000 this one is for traning loging and loggin to wandb
-
+eval_interval = 10   #was 1000 this one is for traning logging and logging to wandb
 eval_iters = 50      #was 200 this one is for inside estimate_loss
 log_interval = 5
 

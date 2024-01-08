@@ -79,24 +79,16 @@ if True: # just hiding the visual. A wasted branch, I know.
 
 
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+
 if ddp:
-    init_process_group(backend=backend)
-    ddp_rank = int(os.environ['RANK'])
-    ddp_local_rank = int(os.environ['LOCAL_RANK'])
-    ddp_world_size = int(os.environ['WORLD_SIZE'])
-    device = f'cuda:{ddp_local_rank}'
-    torch.cuda.set_device(device)
-    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
-    seed_offset = ddp_rank # each process gets a different seed
-    # world_size number of processes will be training simultaneously, so we can scale
-    # down the desired gradient accumulation iterations per process proportionally
-    assert gradient_accumulation_steps % ddp_world_size == 0
-    gradient_accumulation_steps //= ddp_world_size
+    # this has to be fixed. I am ignorant.
+    ddp_world_size = 0
+    pass
 else:
-    # if not ddp, we are running on a single gpu, and one process
-    master_process = True
-    seed_offset = 0
-    ddp_world_size = 1
+    master_process = False
+    seed_offset = None
+    gradient_accumulation_steps = 1
+
 
 
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size

@@ -2,8 +2,8 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 ### ToC:
 * [Goals](#goals)
-* [Progress](#progress)
-* [TODO](#todo)
+	* [Progress](#progress)
+	* [TODO](#todo)
 * [DONE](#done)
 * [Misc](#misc)
 
@@ -43,6 +43,7 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 ---
 ### **TODO:** <a name="todo">
 
+* I really to investigate the learning rates. cause apparently, it's all butterflies effect.
 
 * Should take priority now: **Optimizer**: I need to be re-write it, because I intend to have different lr for diff group of variables.
 	* Need a way to split between, pre-trained weights and newly introduced ones. So we can log differences...
@@ -61,7 +62,6 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 	* Decomposition 2 > 
 	* Decomposition 3 > 
 
-
 *  Questions:
 	* Freezing the weights apparently helps, is there a way to quantify the impact?
 	* How the KP factors are changing with and without freezing of other weights?
@@ -75,33 +75,28 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 * **Experiments that needs to be done:** >> Please check the latex document. Sec X.X
 
 * How can you monitor what is your network learning?
-	* we need some logging of the gradient / activation maps (I think they're called attention maps, not to be confused with attention blocks of the transformer).
-	* start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
+	* We need some logging of the gradient / activation maps (I think they're called attention maps, not to be confused with attention blocks of the transformer).
+	* Start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
 
-* Kronecker Decomposition is actually not the closest to W:
+* Add this to your tex file.  Van Loan Kronecker Decomposition is actually not the closest to W:
 	* i.e., when I distill the student/teacher. the mse btw the original weights and KP weights actually gets bigger. this is kinda surprising, but it could make sense somehow.
 	* next: add grad accumulation (I doubt that It would help) [DONE], true, didn't help.
 	* also add grad-clipping [DONE]
 	* Investigate this more. [DONE]
 
 * In the distillation, have a quick/efficient way of:
-	* parameters loading.
-	* right now, I'm setting params manually
+	* Parameters loading.
+	* Right now, I'm setting params manually
 	* this should be done auto, be a professional! it's better for long term dev.
 
 * Optimize compute 
-	* Still haven't used any KP props. But I doubt that it would help.
+	* Still haven't used any KP props. But I doubt that it would help [compute is not the bottleneck here].
 
-* More Experiment.
+* More Experiments.
 	* different n / m for KroneckerDecom
 	* Try the Kronecker decomposition using the lib.
 
-* Clean this repo
-	* remove unnecessary if/else for readability
-	* bring back ddp, dumb ass.
-	* clean the TODO/DONE. only keep necessary stuff.
-	* e.g., add toc
-	* add a quick script on how to generate a new checkpoint from scratch.
+* Add a quick script on how to generate a new checkpoint from scratch. 
 
 ### **DONE**    <a name="done">
 
