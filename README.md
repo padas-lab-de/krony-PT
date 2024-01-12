@@ -21,7 +21,8 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ### **Progress**  <a name="progress">
 
 * I exclusively work on GPT2 now, and I'm testing different setups.
-* Main thing to be done: Update optimized, and have different learning rates for new params and already trained parameters.
+* 50% deterministic (either pick even or odd rows) prunning works way better than any other initialization.
+* Main thing to be done next: Update the optimizer, and have different learning rates for new params and already trained parameters.
 
 * [Link to wandb logs](https://wandb.ai/benayad7/freezing-test?workspace=user-benayad7)
 
@@ -30,7 +31,7 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 --->
 
 
-* Why more to GPT2: I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
+* Why move to GPT2: I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
 
 **Some remarks:** 
 
