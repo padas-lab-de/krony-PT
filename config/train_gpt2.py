@@ -12,7 +12,7 @@ wandb_run_name='gpt2-prune-alterante-freezing'
 # 12 batch size * 1024 block size * 5 gradaccum * 8 GPUs = 491,520
 batch_size = 12
 block_size = 1024
-gradient_accumulation_steps = 5 * 8
+gradient_accumulation_steps = 5*4
 
 # this makes total number of tokens be 300B
 max_iters = 300
@@ -21,8 +21,12 @@ lr_decay_iters = 300
 # eval stuff
 
 eval_interval = 10   #was 1000 this one is for traning logging and logging to wandb
-eval_iters = 50      #was 200 this one is for inside estimate_loss
-log_interval = 5
+
+eval_iters = 20      #was 200 this one is for inside estimate_loss
+
+
+
+log_interval = 10   # used for logging in the mfu part of the loop
 
 # weight decay
 weight_decay = 1e-1

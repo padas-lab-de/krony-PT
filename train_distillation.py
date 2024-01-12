@@ -171,6 +171,7 @@ student.to(device)
 print(">> Loading DONE, computing loss")
 print(f">> Loss: {estimate_loss(student)}")
 
+
 # Teacher: layering down
 teacher_wte = teacher.transformer.wte
 teacher_wpe = teacher.transformer.wpe
@@ -212,21 +213,19 @@ optimizer = student.configure_optimizers(weight_decay, learning_rate, (beta1, be
 
 with torch.no_grad():
     [p.requires_grad_(False) for _,p in teacher.named_parameters()]
-    [p.requires_grad_(False) for _,p in student.named_parameters()]
+    #[p.requires_grad_(False) for _,p in student.named_parameters()]
 
 student_keys = list(student.state_dict().keys())
 
 def unfreeze_names(layer: int):
+    """Wtf"""
     return [pn for pn in student_keys if any([pn.endswith("0"), pn.endswith("1")]) and f"h.{layer}." in pn]
 
-# Releasing some weights.
-s = 8
-stops = [4, 8]
 
-for l in range(s,12):
-    [p.requires_grad_(True) for pn,p in student.named_parameters() if pn in unfreeze_names(l)]
+# release the _1 (size 2)
+[p.requires_grad_(True) for pn,p in student.named_parameters() if pn.endswith("_1")]
 
-lrr = 0.01
+lrr = 0.1
 print(f"mr l mf'ing r is {lrr}")
 
 while 1:
@@ -275,9 +274,7 @@ while 1:
             pos_emb = student.transformer.wpe(pos) 
             x = student.transformer.drop(tok_emb + pos_emb)
 
-            for b in range(len(teacher_h),s):
-                x = teacher_h[b](x)
-            for l in range(s, len(teacher_h)):
+            for l in range(len(teacher_h)):
                 x = student_h[l](x)
             x = student.transformer.ln_f(x)
 
@@ -285,26 +282,16 @@ while 1:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
 
+
         idx, targets = get_batch('train') 
         scaler.scale(loss).backward()
         
-    if iter_num % 10 == 0:
+    #if iter_num % 10 == 0:
+    if iter_num % 5 == 0:
         print(f"loss at step {iter_num} >> {loss*gradient_accumulation_steps}")
 
-    if iter_num == 50 :
-        print(f"unfreezing the other from 4 to {s}")
-        for l in range(4,s):
-            [p.requires_grad_(True) for pn,p in student.named_parameters() if pn in unfreeze_names(l)]
-
-    if iter_num == 100:
-        print(f"unfreezing the other from 0 to 4")
-        for l in range(4):
-            [p.requires_grad_(True) for pn,p in student.named_parameters() if pn in unfreeze_names(l)]
-
-    if iter_num == 150:
-        lrr = 0.001
-        print("unfreezing ALL weights")
-        [p.requires_grad_(True) for _,p in student.named_parameters()]
+    if iter_num % 70 == 0:
+        [p.requires_grad_(True) for pn,p in student.named_parameters() if pn.endswith("_0")]
 
     # clip the gradient
     if grad_clip != 0.0:
@@ -319,7 +306,7 @@ while 1:
     local_iter_num += 1
     # termination conditions
 
-    if iter_num > 350:
+    if iter_num > 150:
         break
 
 if ddp:

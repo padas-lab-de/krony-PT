@@ -2,8 +2,8 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 ### ToC:
 * [Goals](#goals)
-	* [Progress](#progress)
-	* [TODO](#todo)
+* [Progress](#progress)
+* [TODO](#todo)
 * [DONE](#done)
 * [Misc](#misc)
 
@@ -20,7 +20,8 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **Progress**  <a name="progress">
 
-**Status:** I'm moving to GPT2 124M. 
+* I exclusively work on GPT2 now, and I'm testing different setups.
+* Main thing to be done: Update optimized, and have different learning rates for new params and already trained parameters.
 
 * [Link to wandb logs](https://wandb.ai/benayad7/freezing-test?workspace=user-benayad7)
 
@@ -28,61 +29,39 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 * [Link to pdf (soon)](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
 --->
 
-**Update:** 
 
-I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
+* Why more to GPT2: I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
 
 **Some remarks:** 
 
 * GPT2 takes approx 20GB of memory. 
 * Initial loss is 10.9886 10.9898. with random init.
-* HF checkpoint is 3.11 approx.
-	* this gets approx on Wikitest 103: 
-	* I'll keep GLUE for later, I'll focus on 
+* HF checkpoint is 3.11 approx (on open web text)
 
 ---
 ### **TODO:** <a name="todo">
 
-* I really to investigate the learning rates. cause apparently, it's all butterflies effect.
+* Investigate:
+	* the batch_size and gradient_steps, how many iterations do you exactly need for one epoch?
+	* Increase the batch_size and impact
+	* links btw gradient_acc and learning rate. this is almost alchemy here. I need some clear rules.
 
-* Should take priority now: **Optimizer**: I need to be re-write it, because I intend to have different lr for diff group of variables.
-	* Need a way to split between, pre-trained weights and newly introduced ones. So we can log differences...
+* Work on **Optimizer/lr**:
+	* I need to investigate the learning rates. Cause apparently, it's all butterflies effect.
+	* Make it easy way to set different  lr for diff group of variables.
+	* Groups as: pre-trained weights and newly introduced ones. So we can log differences...
 
-* Write results on freezing on tex file.
 
-* Write code for 1 by 1 training:
+* Write results on freezing on .tex file.
+
+* Write code for 1 by 1 training:  [Code is done, testing not fully]
 	* form the highest level to the lowest and vice versa.
 	* Log results.
-	* Write.
 
-* Run code for 1 by 1 distillation.
+* Add **ddp** to code for 1 by 1 training (`train_distillation.py`). (this is done for train.py, so it should be am easy copy paste, approx 2 hours of work)
 
 * Get a 3 decompositions, target point is **85M** (same or under DistilGPT)
 	* Decomposition 1 > 95M from $(3072, 768)$ to $(3072, 384)$  [DONE]
-	* Decomposition 2 > 
-	* Decomposition 3 > 
-
-*  Questions:
-	* Freezing the weights apparently helps, is there a way to quantify the impact?
-	* How the KP factors are changing with and without freezing of other weights?
-	* Some metric applied on the grads? 
-
-
-* change the behavior of optimizers, mainly the lr:	
-	* currently even the pre-trained params are set to the same lr as the other decomposed matrices. 
-	* doesn't seem right.
-
-* **Experiments that needs to be done:** >> Please check the latex document. Sec X.X
-
-* How can you monitor what is your network learning?
-	* We need some logging of the gradient / activation maps (I think they're called attention maps, not to be confused with attention blocks of the transformer).
-	* Start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
-
-* Add this to your tex file.  Van Loan Kronecker Decomposition is actually not the closest to W:
-	* i.e., when I distill the student/teacher. the mse btw the original weights and KP weights actually gets bigger. this is kinda surprising, but it could make sense somehow.
-	* next: add grad accumulation (I doubt that It would help) [DONE], true, didn't help.
-	* also add grad-clipping [DONE]
-	* Investigate this more. [DONE]
 
 * In the distillation, have a quick/efficient way of:
 	* Parameters loading.
@@ -98,13 +77,33 @@ I feel like the small model (10M param  with characters) is very unreliable. I c
 
 * Add a quick script on how to generate a new checkpoint from scratch. 
 
-### **DONE**    <a name="done">
+---
+*  Questions:
+	* Freezing the weights apparently helps, is there a way to quantify the impact?
+	* How the KP factors are changing with and without freezing of other weights?
+	* Some metric applied on the grads? 
 
-* Test Freezing, for Rand, VL and Prune initialization. [DONE]
-	* Test mixed strategies: (Freeze / Release) x Repeat.
+* **Experiments that needs to be done:** >> Please check the latex document. Sec X.X (I'll make this public soon)
+
+* How can you monitor what is your network learning?
+	* We need some logging of the gradient / activation maps (I think they're called attention maps, not to be confused with attention blocks of the transformer).
+	* Start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
+
+* Add this to your tex file.  Van Loan Kronecker Decomposition is actually not the closest to W:
+	* i.e., when I distill the student/teacher. the mse btw the original weights and KP weights actually gets bigger. this is kinda surprising, but it could make sense somehow.
+	* next: add grad accumulation (I doubt that It would help) [DONE], true, didn't help.
+	* also add grad-clipping [DONE]
+	* Investigate this more. [DONE]
+	* Van Loan is a shitty init (make this friendly). 
+
+### **DONE**    <a name="done">
 
 * Fix distributed testing. **ddp** (you shouldn't have deleted dumb ass) [DONE] (but not working, most likely a mem. issue)
 	* Need to able to run on two nodes, today, better, yesterday!
+	* Fixed the issue: add `CUDA_VISIBLE_DEVICES` accordingly, and `nproc_per_node`
+
+* Test Freezing, for Rand, VL and Prune initialization. [DONE]
+	* Test mixed strategies: (Freeze / Release) x Repeat.
 
 * Automate Kronecker decomposition, one single file that generates the factors and checkpoint and stores it as *ckpt_n_n_fac* **[DONE]**
 	* one script should run from terminal to generate the ckpt

@@ -81,13 +81,30 @@ if True: # just hiding the visual. A wasted branch, I know.
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 
 if ddp:
-    # this has to be fixed. I am ignorant.
-    ddp_world_size = 0
-    pass
+    init_process_group(backend=backend)
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+
+    print("some details where the fuck are we",
+          ddp_rank,
+          ddp_local_rank,
+          ddp_world_size,
+          )
+
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
+    seed_offset = ddp_rank # each process gets a different seed
+    # world_size number of processes will be training simultaneously, so we can scale
+    # down the desired gradient accumulation iterations per process proportionally
+    assert gradient_accumulation_steps % ddp_world_size == 0
+    gradient_accumulation_steps //= ddp_world_size
 else:
-    master_process = False
-    seed_offset = None
-    gradient_accumulation_steps = 1
+    # if not ddp, we are running on a single gpu, and one process
+    master_process = True
+    seed_offset = 0
+    ddp_world_size = 1
 
 
 
@@ -314,11 +331,10 @@ while True:
         #print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
     iter_num += 1
     local_iter_num += 1
-
     # termination conditions
+
     if iter_num > max_iters:
         break
 
 if ddp:
     destroy_process_group()
-
