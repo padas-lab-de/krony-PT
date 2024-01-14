@@ -42,6 +42,10 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **TODO:** <a name="todo">
 
+* 2 factors with prunning:
+	* same as above, decompose and test correctness.
+	* reproduce loss.
+
 * Investigate:
 	* the batch_size and gradient_steps, how many iterations do you exactly need for one epoch?
 	* Increase the batch_size and impact
@@ -98,6 +102,10 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* Van Loan is a shitty init (make this friendly). 
 
 ### **DONE**    <a name="done">
+
+* 2 factors decomposition: [DONE]
+	* Decompose / Test if the loss values are the same.
+	* Test if every approx is correct!
 
 * Fix distributed testing. **ddp** (you shouldn't have deleted dumb ass) [DONE] (but not working, most likely a mem. issue)
 	* Need to able to run on two nodes, today, better, yesterday!

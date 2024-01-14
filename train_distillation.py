@@ -221,7 +221,6 @@ def unfreeze_names(layer: int):
     """Wtf"""
     return [pn for pn in student_keys if any([pn.endswith("0"), pn.endswith("1")]) and f"h.{layer}." in pn]
 
-
 # release the _1 (size 2)
 [p.requires_grad_(True) for pn,p in student.named_parameters() if pn.endswith("_1")]
 

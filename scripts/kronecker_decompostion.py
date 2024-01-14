@@ -57,9 +57,9 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
 device = torch.device("cuda")
 
 # loadign ckpt
-print("loading ckpt")
+print("1. Loading GPT2 3.11 loss")
 
-sd = torch.load('../out/GPT2.pt', map_location=device)
+sd = torch.load('out/GPT2.pt', map_location=device)
 nms_origin = list(sd.keys())
 
 def kron_it(checkpoint, config: dict):
@@ -88,8 +88,6 @@ def kron_it(checkpoint, config: dict):
 		# cleaning the original checkpoint.
 		nms_origin.remove(c_fc_key)
 		nms_origin.remove(c_proj_key)
-		nms_origin.remove(f"{c_fc_key[:-6]}bias")
-		nms_origin.remove(f"{c_proj_key[:-6]}bias")
 
 		for f in range(fac):
 			for k in range(2):
@@ -104,21 +102,27 @@ def kron_it(checkpoint, config: dict):
 # change here 
 conf = {"fc"   : (3072,384), 
 		"proj" : (384, 3072),
-		"n_factors" : 1
+		"n_factors" : 2
 }
 
-print("Decomposing")
+print("2. Decomposing")
 
-sd_VL1 = kron_it(sd, conf)
-nms =  list(sd_VL1.keys())
+sd_VL_2_factors = kron_it(sd, conf)
+nms =  list(sd_VL_2_factors.keys())
 
 for w in nms_origin:
 	if w not in nms:
-		sd_VL1[w] = sd[w]
+		sd_VL_2_factors[w] = sd[w]
 
 
-print("saving!")
-torch.save(sd_VL1, "../out/GPT2_VL11.pt")
+#print("3. Saving!")
+#torch.save(sd_VL_2_factors, "out/GPT2_VL_2_factors.pt")
+
+
+
+
+
+
 
 
 """

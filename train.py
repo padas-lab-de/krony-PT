@@ -28,7 +28,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 
 from model import KronyGPTConfig, KronyGPT
-
+import matplotlib.pyplot as plt
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
 # I/O
@@ -189,7 +189,7 @@ elif init_from == 'prune':
 elif init_from == 'VL':
     print(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'GPT2_rand_KP_init.pt')
+    ckpt_path = os.path.join(out_dir, 'GPT2_VL11.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
 
     # the checkpoints I'm saving are only weights. I might change this behavior later.
@@ -201,15 +201,12 @@ elif init_from == 'VL':
     model_args['vocab_size'] = 50257
     model_args['bias'] = True
 
-    print(f">>> For completeness I'm setting {model_args}")
-
     gptconf = KronyGPTConfig(**model_args)
-    #model = Kron- The local rank. = dict(dropout=dropout)
-    #model = KronyGPT.from_pretrained(init_from, override_args)
-    model = KronyGPT.from_pretrained(init_from)
-    # read off the created config params, so we can store them into checkpoint correctly
-    for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-        model_args[k] = getattr(model.config, k)
+    model = KronyGPT(gptconf)
+    #state_dict = checkpoint['model']
+    #model.load_state_dict(state_dict)
+
+    model.load_state_dict(checkpoint)
 
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
@@ -279,25 +276,25 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-#nms_all = list(model.state_dict().keys())
-#nms_freeze = [w for w in nms_all if w.endswith("_0")]
-#x = nms_freeze[0]
-
-
-# freeze all weights:
 #with torch.no_grad():
 #    [p.requires_grad_(False) for p in model.parameters()]
-#
+
 #with torch.no_grad():
 #    [p.requires_grad_(True) for pn,p in model.named_parameters() if  pn.endswith("_1")]
-#
+#    [p.requires_grad_(True) for pn,p in model.named_parameters() if  pn.endswith("_0")]
+
+
+
+loss_plt = []
+max_iters = 500
+
+lrr = 0.1
+
 while True:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
-    lrr = 0.01
     for param_group in optimizer.param_groups:
         param_group['lr'] = lrr
-    
     # evaluate the loss on train/val sets and write checkpoints
     #if iter_num % eval_interval == 0 and master_process:
     """
@@ -350,7 +347,10 @@ while True:
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
-    
+
+    if master_process:
+        loss_plt.append(loss.item()*gradient_accumulation_steps)
+
     if iter_num % 5 == 0 and master_process:
         print(f"iter {iter_num}: loss {loss* gradient_accumulation_steps:.4f}")
     # clip the gradient
@@ -362,12 +362,14 @@ while True:
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
 
-    if iter_num == 20:
-        lrr = 0.01
-#
-    if iter_num == 100:
-        lrr = 0.001
-    
+    #if iter_num == 20:
+    #    lrr = 0.01
+
+    if iter_num > 1 and iter_num % 100 == 0:
+        lrr = lrr/10
+        if master_process:
+            print(f">>> Change >>> lr = {lrr}")
+     
     #    with torch.no_grad():
     #        [p.requires_grad_(True) for pn,p in model.named_parameters()]
 
@@ -390,9 +392,17 @@ while True:
     local_iter_num += 1
     # termination conditions
 
-    if iter_num > max_iters:
+    if iter_num >= max_iters:
         break
 
 if ddp:
     destroy_process_group()
 
+
+# Plot the values
+if master_process:
+    plt.plot(range(1, max_iters+1), loss_plt)
+    plt.xlabel('Iteration Number')
+    plt.ylabel('Loss')
+    plt.title('VL init, train all, lr = 0.1, then at each 100 steps divide by 10')
+    plt.savefig('pics/VL_init_train_all.png')
