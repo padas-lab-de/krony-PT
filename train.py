@@ -296,7 +296,7 @@ while True:
     for param_group in optimizer.param_groups:
         param_group['lr'] = lrr
     # evaluate the loss on train/val sets and write checkpoints
-    #if iter_num % eval_interval == 0 and master_process:
+    # if iter_num % eval_interval == 0 and master_process:
     """
     if iter_num % 10 == 0 and master_process:
         losses = estimate_loss()

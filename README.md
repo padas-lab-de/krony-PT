@@ -20,7 +20,7 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **Progress**  <a name="progress">
 
-* I exclusively work on GPT2 now, and I'm testing different setups.
+* Now, I exclusively work on GPT2 now, and I'm testing different setups.
 * 50% deterministic (either pick even or odd rows) prunning works way better than any other initialization.
 * Main thing to be done next: Update the optimizer, and have different learning rates for new params and already trained parameters.
 
@@ -42,9 +42,12 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **TODO:** <a name="todo">
 
+* Need to start retraining for more time. at least 1 epoch.
+	* Hence, you need to code the right learning rates.
+
 * 2 factors with prunning:
-	* same as above, decompose and test correctness.
-	* reproduce loss.
+	* decompose and test correctness.
+	* reproduce loss?
 
 * Investigate:
 	* the batch_size and gradient_steps, how many iterations do you exactly need for one epoch?
@@ -52,18 +55,17 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* links btw gradient_acc and learning rate. this is almost alchemy here. I need some clear rules.
 
 * Work on **Optimizer/lr**:
-	* I need to investigate the learning rates. Cause apparently, it's all butterflies effect.
+	* I need to investigate the learning rates. Cause apparently, results are not very stable.
 	* Make it easy way to set different  lr for diff group of variables.
 	* Groups as: pre-trained weights and newly introduced ones. So we can log differences...
 
 
-* Write results on freezing on .tex file.
+* Write results on freezing on .tex file. (this could wait a bit)
 
 * Write code for 1 by 1 training:  [Code is done, testing not fully]
 	* form the highest level to the lowest and vice versa.
 	* Log results.
-
-* Add **ddp** to code for 1 by 1 training (`train_distillation.py`). (this is done for train.py, so it should be am easy copy paste, approx 2 hours of work)
+	* Add **ddp** to code for 1 by 1 training (`train_distillation.py`). (this is done for train.py, so it should be am easy copy paste, approx 2 hours of work)
 
 * Get a 3 decompositions, target point is **85M** (same or under DistilGPT)
 	* Decomposition 1 > 95M from $(3072, 768)$ to $(3072, 384)$  [DONE]
