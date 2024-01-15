@@ -25,6 +25,7 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 * Main thing to be done next: Update the optimizer, and have different learning rates for new params and already trained parameters.
 
 * [Link to wandb logs](https://wandb.ai/benayad7/freezing-test?workspace=user-benayad7)
+* [New experiments](https://wandb.ai/benayad7/new_lr?workspace=user-benayad7)
 
 <!---
 * [Link to pdf (soon)](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
@@ -42,22 +43,23 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **TODO:** <a name="todo">
 
-* Need to start retraining for more time. at least 1 epoch.
-	* Hence, you need to code the right learning rates.
+
+* Things to try:
+	* different learning rates.
+	* in prune init, remove 0, put 0.1 instead. >> I think this should take priority. there must be smth better than 0.
+	* try a schedule of 600000k for the KP weights. >>>>> This ASAAAAAP
+
+* Need to start retraining for more time. At least 1 epoch. [ so far, I train for 0.5%, in the paper they train for 10%]
 
 * 2 factors with prunning:
 	* decompose and test correctness.
 	* reproduce loss?
 
+
 * Investigate:
 	* the batch_size and gradient_steps, how many iterations do you exactly need for one epoch?
 	* Increase the batch_size and impact
 	* links btw gradient_acc and learning rate. this is almost alchemy here. I need some clear rules.
-
-* Work on **Optimizer/lr**:
-	* I need to investigate the learning rates. Cause apparently, results are not very stable.
-	* Make it easy way to set different  lr for diff group of variables.
-	* Groups as: pre-trained weights and newly introduced ones. So we can log differences...
 
 
 * Write results on freezing on .tex file. (this could wait a bit)
@@ -75,7 +77,7 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* Right now, I'm setting params manually
 	* this should be done auto, be a professional! it's better for long term dev.
 
-* Optimize compute 
+* Optimize compute [No use for it now, gpu are doing their job as of now.] 
 	* Still haven't used any KP props. But I doubt that it would help [compute is not the bottleneck here].
 
 * More Experiments.
@@ -104,6 +106,15 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* Van Loan is a shitty init (make this friendly). 
 
 ### **DONE**    <a name="done">
+
+* Investigate batch_size and nproc_per_node impact on n_tokens and %epoch [DONE]
+	* write a section on it.
+	* tell me exactly, Epoch = f( function batch x gradient_acc x n_nodes )
+
+* Work on **Optimizer/lr**: [DONE]
+	* I need to investigate the learning rates. Cause apparently, results are not very stable.
+	* Make it easy way to set different  lr for diff group of variables.
+	* Groups as: pre-trained weights and newly introduced ones. So we can log differences...
 
 * 2 factors decomposition: [DONE]
 	* Decompose / Test if the loss values are the same.

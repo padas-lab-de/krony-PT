@@ -1,10 +1,19 @@
+"""
+This is a lab, literally. I test and verify correctness of code here.
 
+1. I'm checking if the Optimizer is working as I want. Seems ok.
+2. Data stuff.
+
+"""
+
+
+from regex import P
 import torch
 from model import KronyGPTConfig, KronyGPT
 
 
 if True:  # stuff I don't really care for the moment: 
-    gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
+    gradient_accumulation_steps = 5 * 4 # used to simulate larger batch sizes
     batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
     block_size = 1024
     device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
@@ -41,11 +50,47 @@ model.to(device)
 
 optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 
-
-
-
-
 sdd = model.state_dict()
 nms = list(sdd.keys())
 
-print(nms)
+
+
+## now we investigate the data:
+import numpy as np
+import os 
+
+dataset = 'openwebtext'
+
+data_dir = os.path.join('data', dataset)
+
+train_data = np.memmap(os.path.join(data_dir, 'train.bin'), 
+                       dtype=np.uint16, mode='r')
+
+val_data = np.memmap(os.path.join(data_dir, 'val.bin'), 
+                     dtype=np.uint16, mode='r')
+
+def get_batch(split):
+    data = train_data if split == 'train' else val_data
+    ix = torch.randint(len(data) - block_size, (batch_size,))
+    x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
+    y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+    if device_type == 'cuda':
+        x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+    else:
+        x, y = x.to(device), y.to(device)
+    return x, y
+
+
+X,Y = get_batch("train")
+
+max_iters = 5000
+
+if 1:
+    print(">>>> Some data stats")
+    tpi = gradient_accumulation_steps * 4 * batch_size * block_size
+    print(f"tokens per iteration will be: {tpi:,}")
+    print(f"Train data size {len(train_data):_}")
+    print(f"To see all data we need {len(train_data)/tpi:.1f} iterations")
+    print(f"With {max_iters} iterations, we are going to see {max_iters*tpi/len(train_data):.3f} %")
+
+

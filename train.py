@@ -29,9 +29,7 @@ from torch.distributed import init_process_group, destroy_process_group
 
 from model import KronyGPTConfig, KronyGPT
 import matplotlib.pyplot as plt
-# -----------------------------------------------------------------------------
-# default config values designed to train a gpt2 (124M) on OpenWebText
-# I/O
+
 if True:
     out_dir = 'out'
     eval_interval = 2000
@@ -55,17 +53,6 @@ if True:
     n_embd = 768
     dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
     bias = False # do we use bias inside LayerNorm and Linear layers?
-    # adamw optimizer
-    learning_rate = 6e-4 # max learning rate
-    max_iters = 600000 # total number of training iterations
-    weight_decay = 1e-1
-    beta1 = 0.9
-    beta2 = 0.95
-    grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
-    decay_lr = True # whether to decay the learning rate
-    warmup_iters = 2000 # how many steps to warm up for
-    lr_decay_iters = 600000 # should be ~= max_iters per Chinchilla
-    min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
     # DDP settings
     backend = 'nccl' # 'nccl', 'gloo', etc.
     # system
@@ -73,9 +60,22 @@ if True:
     dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
     compile = True # use PyTorch 2.0 to compile the model to be faster
 
-    config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-    exec(open('configurator.py').read()) # overrides from command line or config file
-    config = {k: globals()[k] for k in config_keys} # will be useful for logging
+    # this gets updated.
+    learning_rate = 1
+    weight_decay = 1
+    min_lr =1
+    max_iters = 0
+    warmup_iters =1
+    lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
+
+    beta1 = 0.9
+    beta2 = 0.95
+    grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
+    decay_lr = True # whether to decay the learning rate
+
+config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
+exec(open('configurator.py').read()) # overrides from command line or config file
+config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 
@@ -100,10 +100,6 @@ else:
 
 
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
-
-
-tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-print(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
@@ -217,10 +213,14 @@ model.to(device)
 
 # initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
-optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 
-#if init_from == 'resume':
-#    optimizer.load_state_dict(checkpoint['optimizer'])
+# I change the optimized as follows: 
+# it was usually the learning_rate, now it's min_lr 
+# why: I keep the pre-trained weights lr as the min, and the new ones, 
+# I changed the learning rate manually. optmizer.group_params['lr'] = get_lr(it)
+
+
+optimizer = model.configure_optimizers(weight_decay, min_lr , (beta1, beta2), device_type)
 
 checkpoint = None
 compile = False 
@@ -249,6 +249,29 @@ def estimate_loss():
     model.train()
     return out
 
+# adamw optimizer
+
+if master_process:
+    print(">>>> Some data stats")
+
+    print(f"ddp_world_size {ddp_world_size}")
+    print(f"gradient blabla {gradient_accumulation_steps}")
+
+    tpi = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+
+    print(f"tokens per iteration will be: {tpi:,}")
+    print(f"Train data size {len(train_data):_}")
+    print(f"To see all data we need {len(train_data)/tpi:.3f}%")
+    print(f"In {max_iters} iterations, we are going to see {max_iters*tpi/len(train_data)}")
+
+    print(">>>>> Training is starting now, here is some stats:")
+    print("learning_rate", learning_rate) 
+    print("weight_decay",  weight_decay)  
+    print("min_lr",        min_lr)        
+    print("max_iters",     max_iters)     
+    print("warmup_iters",  warmup_iters)  
+    print("lr_decay_iters",lr_decay_iters)
+
 # learning rate decay scheduler (cosine with warmup)
 def get_lr(it):
     # 1) linear warmup for warmup_iters steps
@@ -264,7 +287,7 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 # logging
-wandb_log = False # remove this later you amateur
+
 if wandb_log and master_process:
     import wandb
     wandb.init(project=wandb_project, name=wandb_run_name, config=config)
@@ -276,29 +299,21 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-#with torch.no_grad():
-#    [p.requires_grad_(False) for p in model.parameters()]
+# some monitoring of some weights
 
-#with torch.no_grad():
-#    [p.requires_grad_(True) for pn,p in model.named_parameters() if  pn.endswith("_1")]
-#    [p.requires_grad_(True) for pn,p in model.named_parameters() if  pn.endswith("_0")]
+sus =  [pn for pn,p in model.state_dict().items() if pn.endswith("_1")]
+s1, s2 = sus[0], sus[1]
 
-
-
-loss_plt = []
-max_iters = 500
-
-lrr = 0.1
+l1 = torch.zeros(5, 2)
+l2 = torch.zeros(10, 2)
 
 while True:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lrr
-    # evaluate the loss on train/val sets and write checkpoints
-    # if iter_num % eval_interval == 0 and master_process:
-    """
-    if iter_num % 10 == 0 and master_process:
+        param_group['lr'] = lr
+
+    if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss()
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
@@ -321,15 +336,16 @@ while True:
                     'best_val_loss': best_val_loss,
                     'config': config,
                 }
-                # no printing needed for now.
-                #print(f"saving checkpoint to {out_dir}")
-                #torch.save(checkpoint, os.path.join(out_dir, 'prune-no-freeze.pt'))
 
-
-    """
-    
-            
-
+    #if master_process:
+    #    print(">> we are here")
+    #    x1 = model.state_dict()[s1]
+    #    x2 = model.state_dict()[s2]
+    #    l1[iter_num] = x1
+    #    l2[iter_num] = x2
+    #if iter_num % 99 == 0 and master_process:
+    #    print(f"This is iteration {iter_num+1}, Saving checkpoint to {out_dir}")
+    #    torch.save(checkpoint,f"{iter}prune-no-freeze.pt")
 
     if iter_num == 0 and eval_only:
         break
@@ -342,17 +358,15 @@ while True:
         with ctx:
             logits, loss = model(X, Y)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
-        # immediately async prefetch next batch while model is doing the forward pass on the GPU
+        
+        # immediately async prefetch next batch while model is 
+        # doing the forward pass on the GPU >> investigate this in detail, how does it happen.
         # new batch
         X, Y = get_batch('train')
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
 
-    if master_process:
-        loss_plt.append(loss.item()*gradient_accumulation_steps)
 
-    if iter_num % 5 == 0 and master_process:
-        print(f"iter {iter_num}: loss {loss* gradient_accumulation_steps:.4f}")
     # clip the gradient
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
@@ -362,32 +376,20 @@ while True:
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
 
-    #if iter_num == 20:
-    #    lrr = 0.01
-
-    if iter_num > 1 and iter_num % 100 == 0:
-        lrr = lrr/10
-        if master_process:
-            print(f">>> Change >>> lr = {lrr}")
-     
-    #    with torch.no_grad():
-    #        [p.requires_grad_(True) for pn,p in model.named_parameters()]
-
     # timing and logging
-    #t1 = time.time()
-    #dt = t1 - t0
-    #t0 = t1
-    #if iter_num % log_interval == 0 and master_process:
-    #    # get loss as float. note: this is a CPU-GPU sync point
-    #    # scale up to undo the division above, 
-    #    # approximating the true total loss (exact would have been a sum)
-    #    #losses = estimate_loss()
-    #    #print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-    #    lossf = loss.item() * gradient_accumulation_steps
-    #    if local_iter_num >= 5: # let the training loop settle a bit
-    #        mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
-    #        running_mfu = mfu if running_mfu =d= -1.0 else 0.9*running_mfu + 0.1*mfu
-    #    print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+    t1 = time.time()
+    dt = t1 - t0
+    t0 = t1
+    if iter_num % log_interval == 0 and master_process:
+        # get loss as float. note: this is a CPU-GPU sync point
+        # scale up to undo the division above, 
+        # approximating the true total loss (exact would have been a sum)
+        lossf = loss.item() * gradient_accumulation_steps
+        if local_iter_num >= 5: # let the training loop settle a bit
+            mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
+            running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
+        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+
     iter_num += 1
     local_iter_num += 1
     # termination conditions
@@ -395,14 +397,11 @@ while True:
     if iter_num >= max_iters:
         break
 
+#if master_process:
+#    print(l1,l2)
+#    torch.save(l1, "l1.pt")
+#    torch.save(l1, "l1.pt")
 if ddp:
     destroy_process_group()
 
 
-# Plot the values
-if master_process:
-    plt.plot(range(1, max_iters+1), loss_plt)
-    plt.xlabel('Iteration Number')
-    plt.ylabel('Loss')
-    plt.title('VL init, train all, lr = 0.1, then at each 100 steps divide by 10')
-    plt.savefig('pics/VL_init_train_all.png')
