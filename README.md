@@ -43,11 +43,23 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **TODO:** <a name="todo">
 
+* Setup -- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
+
+* Prototyping on Shakespeare -- evening kinda fun. 
+	* Small thing increments.
+	* Load everything from config script [DONE]
+	* Save some checkpoints, save them locally. [DONE]
+	* See how everything is changing overtime.
 
 * Things to try:
-	* different learning rates.
-	* in prune init, remove 0, put 0.1 instead. >> I think this should take priority. there must be smth better than 0.
-	* try a schedule of 600000k for the KP weights. >>>>> This ASAAAAAP
+	* bring all weights with same lr.. don't differentiate btw old and new. [DONE]
+	* different learning rates [DONE / In progress]
+	* different batch size, maybe it's taking too long for an update to happen.. [DONE]
+	* in prune init, remove 0, put 0.0001 instead. >> I think this should take priority. there must be smth better than 0.
+	* try a schedule of 600000k for the KP weights. >>>>> This ASAAAAAP [DONE]
+	* Try the random baseline, random inits as 
+	* mask the `w_1` in forward pass to 1.
+	* 
 
 * Need to start retraining for more time. At least 1 epoch. [ so far, I train for 0.5%, in the paper they train for 10%]
 
@@ -55,14 +67,7 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* decompose and test correctness.
 	* reproduce loss?
 
-
-* Investigate:
-	* the batch_size and gradient_steps, how many iterations do you exactly need for one epoch?
-	* Increase the batch_size and impact
-	* links btw gradient_acc and learning rate. this is almost alchemy here. I need some clear rules.
-
-
-* Write results on freezing on .tex file. (this could wait a bit)
+* Write results on freezing on .tex file. (this could wait a bit) >> this is not very interesting.
 
 * Write code for 1 by 1 training:  [Code is done, testing not fully]
 	* form the highest level to the lowest and vice versa.
@@ -110,6 +115,8 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 * Investigate batch_size and nproc_per_node impact on n_tokens and %epoch [DONE]
 	* write a section on it.
 	* tell me exactly, Epoch = f( function batch x gradient_acc x n_nodes )
+	* with the current setup, 4 A100s. Each step is 250k tokens. and train data is 9B tokens. 
+	* To see 1% of the data: 
 
 * Work on **Optimizer/lr**: [DONE]
 	* I need to investigate the learning rates. Cause apparently, results are not very stable.

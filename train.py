@@ -31,6 +31,7 @@ from model import KronyGPTConfig, KronyGPT
 import matplotlib.pyplot as plt
 
 if True:
+    cut_the_run = 0
     out_dir = 'out'
     eval_interval = 2000
     log_interval = 1
@@ -160,7 +161,7 @@ if init_from == 'scratch':
     gptconf = KronyGPTConfig(**model_args)
     model = KronyGPT(gptconf)
 elif init_from == 'prune':
-    print(f"Resuming training from {out_dir}")
+    print(f"Resuming training from prune init")
     # resume training from a checkpoint.
     ckpt_path = os.path.join(out_dir, 'GPT2_prune_init.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
@@ -183,8 +184,7 @@ elif init_from == 'prune':
 
     #best_val_loss = checkpoint['best_val_loss']
 elif init_from == 'VL':
-    print(f"Resuming training from {out_dir}")
-    # resume training from a checkpoint.
+    print(f"Resuming training from VL11 checkpoint")
     ckpt_path = os.path.join(out_dir, 'GPT2_VL11.pt')
     checkpoint = torch.load(ckpt_path, map_location=device)
 
@@ -217,10 +217,10 @@ scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 # I change the optimized as follows: 
 # it was usually the learning_rate, now it's min_lr 
 # why: I keep the pre-trained weights lr as the min, and the new ones, 
-# I changed the learning rate manually. optmizer.group_params['lr'] = get_lr(it)
+# I changed the learning rate manually. 
+# optmizer.group_params['lr'] = get_lr(it)
 
-
-optimizer = model.configure_optimizers(weight_decay, min_lr , (beta1, beta2), device_type)
+optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 
 checkpoint = None
 compile = False 
@@ -231,7 +231,7 @@ if compile:
     model = torch.compile(model) # requires PyTorch 2.0
 
 if ddp:
-    model = DDP(model, device_ids=[ddp_local_rank], find_unused_parameters = True)
+    model = DDP(model, device_ids=[ddp_local_rank])
 
 # helps estimate an arbitrarily accurate loss over either split using many batches
 @torch.no_grad()
@@ -300,14 +300,13 @@ raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
 # some monitoring of some weights
-
 sus =  [pn for pn,p in model.state_dict().items() if pn.endswith("_1")]
 s1, s2 = sus[0], sus[1]
 
 l1 = torch.zeros(5, 2)
 l2 = torch.zeros(10, 2)
 
-while True:
+while iter_num < cut_the_run:
     # determine and set the learning rate for this iteration
     lr = get_lr(iter_num) if decay_lr else learning_rate
     for param_group in optimizer.param_groups:
@@ -321,31 +320,11 @@ while True:
                 "iter": iter_num,
                 "train/loss": losses['train'],
                 "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
+                "lr": lr
+                #"mfu": running_mfu*100, # convert to percentage
             })
         
-        if losses['val'] < 2.8 or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                }
 
-    #if master_process:
-    #    print(">> we are here")
-    #    x1 = model.state_dict()[s1]
-    #    x2 = model.state_dict()[s2]
-    #    l1[iter_num] = x1
-    #    l2[iter_num] = x2
-    #if iter_num % 99 == 0 and master_process:
-    #    print(f"This is iteration {iter_num+1}, Saving checkpoint to {out_dir}")
-    #    torch.save(checkpoint,f"{iter}prune-no-freeze.pt")
 
     if iter_num == 0 and eval_only:
         break
@@ -376,32 +355,18 @@ while True:
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
 
-    # timing and logging
-    t1 = time.time()
-    dt = t1 - t0
-    t0 = t1
-    if iter_num % log_interval == 0 and master_process:
-        # get loss as float. note: this is a CPU-GPU sync point
-        # scale up to undo the division above, 
-        # approximating the true total loss (exact would have been a sum)
-        lossf = loss.item() * gradient_accumulation_steps
-        if local_iter_num >= 5: # let the training loop settle a bit
-            mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
-            running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-        print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
-
     iter_num += 1
     local_iter_num += 1
-    # termination conditions
 
     if iter_num >= max_iters:
         break
 
-#if master_process:
-#    print(l1,l2)
-#    torch.save(l1, "l1.pt")
-#    torch.save(l1, "l1.pt")
 if ddp:
     destroy_process_group()
+
+
+if master_process:
+    print("Saving the final checkpoint!")
+    torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}.pt")
 
 

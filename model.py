@@ -320,9 +320,9 @@ class KronyGPT(nn.Module):
         new_guys= [p for n, p in param_dict.items() if any([n.endswith("_0"), n.endswith("_1")])]
 
         optim_groups = [
-            #{'params': decay_params, 'weight_decay': weight_decay, 'lr':6e-5},
-            #{'params': nodecay_params, 'weight_decay': 0.0, 'lr':6e-5},
-            {'params': new_guys, 'weight_decay': weight_decay, 'lr': 0.1} 
+            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': nodecay_params, 'weight_decay': 0.0 },
+            {'params': new_guys, 'weight_decay': weight_decay}
         ]
 
         num_decay_params = sum(p.numel() for p in decay_params)

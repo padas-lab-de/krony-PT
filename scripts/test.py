@@ -80,7 +80,6 @@ def get_batch(split):
         x, y = x.to(device), y.to(device)
     return x, y
 
-
 X,Y = get_batch("train")
 
 max_iters = 5000
