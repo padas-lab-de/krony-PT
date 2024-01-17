@@ -32,6 +32,8 @@ import matplotlib.pyplot as plt
 
 if True:
     cut_the_run = 0
+    init_name = "hallo"
+
     out_dir = 'out'
     eval_interval = 2000
     log_interval = 1
@@ -163,7 +165,7 @@ if init_from == 'scratch':
 elif init_from == 'prune':
     print(f"Resuming training from prune init")
     # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, 'GPT2_prune_init.pt')
+    ckpt_path = os.path.join(out_dir, f'{init_name}')
     checkpoint = torch.load(ckpt_path, map_location=device)
 
     # the checkpoints I'm saving are only weights. I might change this behavior later.
@@ -354,6 +356,11 @@ while iter_num < cut_the_run:
     scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
+
+    
+    if iter_num % 900 == 0 and master_process:
+        print("Saving the final checkpoint!")
+        torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}_iteration_{iter_num}.pt")
 
     iter_num += 1
     local_iter_num += 1

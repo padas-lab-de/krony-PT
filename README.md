@@ -43,15 +43,14 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **TODO:** <a name="todo">
 
-* Setup -- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
 
-* Prototyping on Shakespeare -- evening kinda fun. 
-	* Small thing increments.
-	* Load everything from config script [DONE]
-	* Save some checkpoints, save them locally. [DONE]
-	* See how everything is changing overtime.
+* Setup -- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
+	* Compare results of GPT2 - hf.
+	* And some 95M that you trained.
+
 
 * Things to try:
+	* Try masking the 1.
 	* bring all weights with same lr.. don't differentiate btw old and new. [DONE]
 	* different learning rates [DONE / In progress]
 	* different batch size, maybe it's taking too long for an update to happen.. [DONE]
@@ -59,9 +58,13 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* try a schedule of 600000k for the KP weights. >>>>> This ASAAAAAP [DONE]
 	* Try the random baseline, random inits as 
 	* mask the `w_1` in forward pass to 1.
-	* 
 
-* Need to start retraining for more time. At least 1 epoch. [ so far, I train for 0.5%, in the paper they train for 10%]
+* Prototyping on Shakespeare -- evening kinda fun. 
+	* Small thing increments.
+	* Load everything from config script [DONE]
+	* Save some checkpoints, save them locally. [DONE]
+	* See how everything is changing overtime.
+	* Need to start retraining for more time. At least 1 epoch. [ so far, I train for 0.5%, in the paper they train for 10%]
 
 * 2 factors with prunning:
 	* decompose and test correctness.
