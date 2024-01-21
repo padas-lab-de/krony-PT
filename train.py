@@ -119,6 +119,7 @@ ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
+
 train_data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
 val_data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
 def get_batch(split):
@@ -309,71 +310,72 @@ l1 = torch.zeros(5, 2)
 l2 = torch.zeros(10, 2)
 
 while iter_num < cut_the_run:
-    # determine and set the learning rate for this iteration
-    lr = get_lr(iter_num) if decay_lr else learning_rate
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
+# determine and set the learning rate for this iteration
+	lr = get_lr(iter_num) if decay_lr else learning_rate
+	for param_group in optimizer.param_groups:
+		param_group['lr'] = lr
 
-    if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr
-                #"mfu": running_mfu*100, # convert to percentage
-            })
-        
+	if iter_num == 10000:
+		print("batch size changing right now to 16 and gradient back to normal")
+		batch_size = 16
+		gradient_accumulation_steps = 5*4 
 
-
-    if iter_num == 0 and eval_only:
-        break
-
-    # forward backward update, with optional gradient accumulation to simulate larger batch size
-    # and using the GradScaler if data type is float16
-    for micro_step in range(gradient_accumulation_steps):
-        if ddp:
-            model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
-        with ctx:
-            logits, loss = model(X, Y)
-            loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
-        
-        # immediately async prefetch next batch while model is 
-        # doing the forward pass on the GPU >> investigate this in detail, how does it happen.
-        # new batch
-        X, Y = get_batch('train')
-        # backward pass, with gradient scaling if training in fp16
-        scaler.scale(loss).backward()
+	if iter_num % eval_interval == 0 and master_process:
+		losses = estimate_loss()
+		print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+		if wandb_log:
+			wandb.log({
+				"iter": iter_num,
+				"train/loss": losses['train'],
+				"val/loss": losses['val'],
+				"lr": lr
+				#"mfu": running_mfu*100, # convert to percentage
+			})
+		
 
 
-    # clip the gradient
-    if grad_clip != 0.0:
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+	if iter_num == 0 and eval_only:
+		break
 
-    scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
-    scaler.update()
-    optimizer.zero_grad(set_to_none=True)
+# forward backward update, with optional gradient accumulation to simulate larger batch size
+# and using the GradScaler if data type is float16
+	for micro_step in range(gradient_accumulation_steps):
+		if ddp:
+			model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+		with ctx:
+			logits, loss = model(X, Y)
+			loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
+		
+		# immediately async prefetch next batch while model is 
+		# doing the forward pass on the GPU >> investigate this in detail, how does it happen.
+		# new batch
+		X, Y = get_batch('train')
+		# backward pass, with gradient scaling if training in fp16
+		scaler.scale(loss).backward()
 
-    
-    if iter_num % 900 == 0 and master_process:
-        print("Saving the final checkpoint!")
-        torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}_iteration_{iter_num}.pt")
+# clip the gradient
+	if grad_clip != 0.0:
+		scaler.unscale_(optimizer)
+		torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
 
-    iter_num += 1
-    local_iter_num += 1
+	scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
+	scaler.update()
+	optimizer.zero_grad(set_to_none=True)
 
-    if iter_num >= max_iters:
-        break
+
+	if iter_num > 1 and iter_num % 900 == 0 and master_process:
+		print(f"Saving the checkpoint at iteration {iter_num}!")
+		torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}_iteration_{iter_num}.pt")
+
+	iter_num += 1
+	local_iter_num += 1
+
+	if iter_num >= max_iters:
+		break
 
 if ddp:
-    destroy_process_group()
+	destroy_process_group()
 
 
-if master_process:
-    print("Saving the final checkpoint!")
-    torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}.pt")
 
 

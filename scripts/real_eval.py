@@ -1,19 +1,22 @@
 """
+
 1. Load GPT2 124M and a re-trianed KroneckerGPT 95M with less than 1% data.
-2. Test it on different benchmarks. Using: https://github.com/EleutherAI/lm-evaluation-harnessA
+2. Test it on different benchmarks. Using: https://github.com/EleutherAI/lm-evaluation-harness
+
 """
-  
+
 import numpy as np
 import torch
-import torch.nn as nn
 
+import torch.nn as nn
 from torch.nn import functional as F
 
 from model_origin import *
 from model import *
 
 
-# put some vars here.
+# Put some vars here.
+
 config_args = dict(
 	n_layer=12, 
 	n_head=12, 
@@ -70,6 +73,7 @@ GPT.to(device)
 print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for NormyGPT is {estimate_loss(GPT)}")
 
+"""
 # Case 2:  Kronecker GPT 
 print("KronyGPT 1st Loading")
 krony_state_dict = torch.load("checkpoints/gpt2-prune-lr-same-all-batch-12.pt")
@@ -89,20 +93,59 @@ print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT)}")
 
 
+checks = ["gpt2-prune-new_init_0_001_iteration_27000"]
 
-# Case 2:  Kronecker GPT 
-print("KronyGPT 2nd Loading")
-krony_state_dict_2 = torch.load("checkpoints/gpt2-VL-lr-kdjfkdj-same-all-batch-1-warmup-1k.pt")
+for check in checks:
+	print(f"Eval of {check}")
+	sd = torch.load(f"checkpoints/{check}.pt")
 
-# small cleaning. ddp leftovers.
-for pn,p in list(krony_state_dict.items()):
-	if pn.startswith("module"):
-		krony_state_dict_2[pn[7:]] = krony_state_dict_2.pop(pn)
+	for pn,p in list(krony_state_dict.items()):
+		if pn.startswith("module"):
+			sd[pn[7:]] = sd.pop(pn)
 
-KronyGPT.load_state_dict(krony_state_dict )
+	KronyGPT.load_state_dict(krony_state_dict)
 
-#print("Loading to GPU")
-#KronyGPT.to(device)
-print(f"Computing the loss over {eval_iters} batches of 12")
-print(f"Loss for KronyGPT2 with VL init is {estimate_loss(KronyGPT)}")
+	print(f"Computing the loss over {eval_iters} batches of 12")
+	print(f"Loss for KronyGPT2 with VL init is {estimate_loss(KronyGPT)}")
+
+## generation stuff
+"""
+
+import tiktoken
+import os
+
+load_meta = False
+init_from = "resume"
+start = "\n" # or "<|endoftext|>" or etc. Can also specify a file, use as: "FILE:prompt.txt"
+num_samples = 10 # number of samples to draw
+max_new_tokens = 500 # number of tokens generated in each sample
+temperature = 0.8 # 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
+top_k = 200 # retain only the top_k most likely tokens, clamp others to have 0 probability
+seed = 1337
+
+GPT.eval()
+
+print("No meta.pkl found, assuming GPT-2 encodings...")
+enc = tiktoken.get_encoding("gpt2")
+encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
+decode = lambda l: enc.decode(l)
+
+# encode the beginning of the prompt
+if start.startswith('FILE:'):
+    with open(start[5:], 'r', encoding='utf-8') as f:
+        start = f.read()
+
+start="What is the answer to life, the universe, and everything?" 
+
+start_ids = encode(start)
+x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
+
+# run generation
+with torch.no_grad():
+    with ctx:
+        for k in range(num_samples):
+            y = GPT.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
+            print(decode(y[0].tolist()))
+            print('---------------')
+
 

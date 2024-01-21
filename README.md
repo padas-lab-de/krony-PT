@@ -27,10 +27,6 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 * [Link to wandb logs](https://wandb.ai/benayad7/freezing-test?workspace=user-benayad7)
 * [New experiments](https://wandb.ai/benayad7/new_lr?workspace=user-benayad7)
 
-<!---
-* [Link to pdf (soon)](https://wandb.ai/benayad/shakespeare-char?workspace=user-sunnyayoub17)
---->
-
 
 * Why move to GPT2: I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
 
@@ -43,21 +39,21 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 ---
 ### **TODO:** <a name="todo">
 
+* Can you check all good checkpoints and see what's up.
 
 * Setup -- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
-	* Compare results of GPT2 - hf.
+	* Compare results of GPT2 - HF.
 	* And some 95M that you trained.
-
+	* this pytorch life is too much hustle, just migrate to HF.
 
 * Things to try:
-	* Try masking the 1.
-	* bring all weights with same lr.. don't differentiate btw old and new. [DONE]
+	* Try masking the 1 in forward pass, and don't update during backward
+	* Bring all weights with same lr.. don't differentiate btw old and new. [DONE]
 	* different learning rates [DONE / In progress]
 	* different batch size, maybe it's taking too long for an update to happen.. [DONE]
 	* in prune init, remove 0, put 0.0001 instead. >> I think this should take priority. there must be smth better than 0.
-	* try a schedule of 600000k for the KP weights. >>>>> This ASAAAAAP [DONE]
+	* Try a schedule of 600000k for the KP weights. >>>>> This ASAAAAAP [DONE]
 	* Try the random baseline, random inits as 
-	* mask the `w_1` in forward pass to 1.
 
 * Prototyping on Shakespeare -- evening kinda fun. 
 	* Small thing increments.
@@ -66,9 +62,9 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* See how everything is changing overtime.
 	* Need to start retraining for more time. At least 1 epoch. [ so far, I train for 0.5%, in the paper they train for 10%]
 
-* 2 factors with prunning:
+* 2 factors with pruning:
 	* decompose and test correctness.
-	* reproduce loss?
+	* Bug, Reproduce loss?
 
 * Write results on freezing on .tex file. (this could wait a bit) >> this is not very interesting.
 

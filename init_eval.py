@@ -33,8 +33,6 @@ if True:
     device_type = "cuda"
     eval_iters = 200
 
-
-
 if True: # data loader here AND estimate loss.
     path = 'data/openwebtext/'
     train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')

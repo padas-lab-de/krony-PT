@@ -320,7 +320,7 @@ class KronyGPT(nn.Module):
         new_guys= [p for n, p in param_dict.items() if any([n.endswith("_0"), n.endswith("_1")])]
 
         optim_groups = [
-            {'params': decay_params, 'weight_decay': weight_decay},
+            {'params': decay_params, 'weight_decay': 0.0},
             {'params': nodecay_params, 'weight_decay': 0.0 },
             {'params': new_guys, 'weight_decay': weight_decay}
         ]
@@ -382,5 +382,4 @@ class KronyGPT(nn.Module):
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
-
         return idx
