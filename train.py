@@ -163,32 +163,10 @@ if init_from == 'scratch':
     model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
     gptconf = KronyGPTConfig(**model_args)
     model = KronyGPT(gptconf)
-elif init_from == 'prune':
-    print(f"Resuming training from prune init")
-    # resume training from a checkpoint.
-    ckpt_path = os.path.join(out_dir, f'{init_name}')
-    checkpoint = torch.load(ckpt_path, map_location=device)
 
-    # the checkpoints I'm saving are only weights. I might change this behavior later.
-    #checkpoint_model_args = checkpoint['model_args']
-    #for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-    #    model_args[k] = checkpoint_model_args[k]
-
-    # create the model
-    model_args['vocab_size'] = 50257
-    model_args['bias'] = True
-
-    gptconf = KronyGPTConfig(**model_args)
-    model = KronyGPT(gptconf)
-    #state_dict = checkpoint['model']
-    #model.load_state_dict(state_dict)
-
-    model.load_state_dict(checkpoint)
-
-    #best_val_loss = checkpoint['best_val_loss']
-elif init_from == 'VL':
-    print(f"Resuming training from VL11 checkpoint")
-    ckpt_path = os.path.join(out_dir, 'GPT2_VL11.pt')
+else:
+    print(f"Resuming training from {init_from} {init_name}")
+    ckpt_path = os.path.join(out_dir, init_name)
     checkpoint = torch.load(ckpt_path, map_location=device)
 
     # the checkpoints I'm saving are only weights. I might change this behavior later.
@@ -228,11 +206,6 @@ optimizer = model.configure_optimizers(weight_decay, learning_rate, (beta1, beta
 checkpoint = None
 compile = False 
 
-if compile:
-    print("compiling the model... (takes a ~minute)")
-    unoptimized_model = model
-    model = torch.compile(model) # requires PyTorch 2.0
-
 if ddp:
     model = DDP(model, device_ids=[ddp_local_rank])
 
@@ -253,10 +226,8 @@ def estimate_loss():
     return out
 
 # adamw optimizer
-
 if master_process:
     print(">>>> Some data stats")
-
     print(f"ddp_world_size {ddp_world_size}")
     print(f"gradient blabla {gradient_accumulation_steps}")
 
@@ -265,9 +236,11 @@ if master_process:
     print(f"tokens per iteration will be: {tpi:,}")
     print(f"Train data size {len(train_data):_}")
     print(f"To see all data we need {len(train_data)/tpi:.3f}%")
-    print(f"In {max_iters} iterations, we are going to see {max_iters*tpi/len(train_data)}")
+    print(f"In {cut_the_run} iters. we are going to see {100*cut_the_run*tpi/len(train_data)}")
 
     print(">>>>> Training is starting now, here is some stats:")
+    print("batch size",    batch_size) 
+    print("weight_decay",  weight_decay)  
     print("learning_rate", learning_rate) 
     print("weight_decay",  weight_decay)  
     print("min_lr",        min_lr)        
@@ -302,23 +275,11 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-# some monitoring of some weights
-sus =  [pn for pn,p in model.state_dict().items() if pn.endswith("_1")]
-s1, s2 = sus[0], sus[1]
-
-l1 = torch.zeros(5, 2)
-l2 = torch.zeros(10, 2)
-
 while iter_num < cut_the_run:
 # determine and set the learning rate for this iteration
 	lr = get_lr(iter_num) if decay_lr else learning_rate
 	for param_group in optimizer.param_groups:
 		param_group['lr'] = lr
-
-	if iter_num == 10000:
-		print("batch size changing right now to 16 and gradient back to normal")
-		batch_size = 16
-		gradient_accumulation_steps = 5*4 
 
 	if iter_num % eval_interval == 0 and master_process:
 		losses = estimate_loss()
@@ -344,7 +305,8 @@ while iter_num < cut_the_run:
 			model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
 		with ctx:
 			logits, loss = model(X, Y)
-			loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
+			loss = loss / gradient_accumulation_steps 
+			# scale the loss to account for gradient accumulation
 		
 		# immediately async prefetch next batch while model is 
 		# doing the forward pass on the GPU >> investigate this in detail, how does it happen.

@@ -1,8 +1,6 @@
 """
-
 1. Load GPT2 124M and a re-trianed KroneckerGPT 95M with less than 1% data.
 2. Test it on different benchmarks. Using: https://github.com/EleutherAI/lm-evaluation-harness
-
 """
 
 import numpy as np
@@ -73,7 +71,6 @@ GPT.to(device)
 print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for NormyGPT is {estimate_loss(GPT)}")
 
-"""
 # Case 2:  Kronecker GPT 
 print("KronyGPT 1st Loading")
 krony_state_dict = torch.load("checkpoints/gpt2-prune-lr-same-all-batch-12.pt")
@@ -93,7 +90,14 @@ print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT)}")
 
 
-checks = ["gpt2-prune-new_init_0_001_iteration_27000"]
+checks = [] 
+
+for r,d,f in os.walk("checkpoints/"):
+	i = f
+
+
+
+
 
 for check in checks:
 	print(f"Eval of {check}")
@@ -108,8 +112,8 @@ for check in checks:
 	print(f"Computing the loss over {eval_iters} batches of 12")
 	print(f"Loss for KronyGPT2 with VL init is {estimate_loss(KronyGPT)}")
 
-## generation stuff
 """
+## generation stuff
 
 import tiktoken
 import os
@@ -148,4 +152,4 @@ with torch.no_grad():
             print(decode(y[0].tolist()))
             print('---------------')
 
-
+"""

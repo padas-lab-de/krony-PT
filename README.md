@@ -38,6 +38,12 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 
 ---
 ### **TODO:** <a name="todo">
+* Priority:
+1. re-run everything.
+2. distillation, make it work
+3. eval, perplpexity
+
+
 
 * Can you check all good checkpoints and see what's up.
 
