@@ -30,57 +30,31 @@ import torch.nn.functional as F
 from model_origin import GPT, GPTConfig
 from model import KronyGPT, KronyGPTConfig
 
+if True: # vs code, hiding stuff
+    config_args = dict(
+        n_layer=12, 
+        n_head=12, 
+        n_embd=768,
+        vocab_size = 50257,
+        block_size = 1024,
+        bias = True,
+    )
 
 
-if True:
-    out_dir = 'out'
-    eval_interval = 2000
-    log_interval = 1
-    eval_iters = 200
-    eval_only = False # if True, script exits right after the first eval
-    always_save_checkpoint = True # if True, always save a checkpoint after each eval
-    init_from = 'scratch' # 'scratch' or 'resume' or 'gpt2*'
-    # wandb logging
-    wandb_log = False # disabled by default
-    wandb_project = 'owt'
-    wandb_run_name = 'gpt2' # 'run' + str(time.time())
-    # data
-    dataset = 'openwebtext'
-    gradient_accumulation_steps = 5 * 8 # used to simulate larger batch sizes
-    batch_size = 12 # if gradient_accumulation_steps > 1, this is the micro-batch size
-    block_size = 1024
-    # model
-    n_layer = 12
-    n_head = 12
-    n_embd = 768
-    dropout = 0.0 # for pretraining 0 is good, for finetuning try 0.1+
-    bias = False # do we use bias inside LayerNorm and Linear layers?
-    # adamw optimizer
-    learning_rate = 6e-4 # max learning rate
-    max_iters = 600000 # total number of training iterations
-    weight_decay = 1e-1
-    beta1 = 0.9
-    beta2 = 0.95
-    grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
-    decay_lr = True # whether to decay the learning rate
-    warmup_iters = 2000 # how many steps to warm up for
-    lr_decay_iters = 600000 
-    min_lr = 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
-    # DDP settings
-    backend = 'nccl' # 'nccl', 'gloo', etc.
-    # system
-    device = 'cuda' # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+    batch_size = 0
+    block_size = config_args["block_size"]
+    device = "cuda"
+    device_type = "cuda"
+
+    eval_iters = 200 # used in estimate_loss()
+
+    gradient_accumulation_steps = 1
     dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16' # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
-    compile = True # use PyTorch 2.0 to compile the model to be faster
+    ddp = 0
+    iter_num = 0  
+    cut_the_run = 0
 
-    config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
-    exec(open('configurator.py').read()) # overrides from command line or config file
-    config = {k: globals()[k] for k in config_keys} # will be useful for logging
-
-    master_process = True
     seed_offset = 0
-    ddp_world_size = 1
-
     torch.manual_seed(1337 + seed_offset)
     torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
     torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
@@ -89,24 +63,64 @@ if True:
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
     ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
+    # this gets updated.
+    learning_rate = 1
+    weight_decay = 1
+    min_lr =1
+    max_iters = 0
+    warmup_iters =1
+    lr_decay_iters = max_iters # should be ~= max_iters per Chinchilla
 
-    data_dir =   'data/openwebtext'
-    train_data = np.memmap(f"{data_dir}/train.bin", dtype=np.uint16, mode='r')
-    val_data = np.memmap(f'{data_dir}/val.bin', dtype=np.uint16, mode='r')
+    beta1 = 0.9
+    beta2 = 0.95
+    grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
+    decay_lr = True # whether to decay the learning rate
+
+config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
+exec(open('configurator.py').read()) # overrides from command line or config file
+config = {k: globals()[k] for k in config_keys} # will be useful for logging
+
+ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+
+if ddp:
+    init_process_group(backend=backend)
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0 # this process will do logging, checkpointing etc.
+    seed_offset = ddp_rank # each process gets a different seed
+    # world_size number of processes will be training simultaneously, so we can scale
+    # down the desired gradient accumulation iterations per process proportionally
+    assert gradient_accumulation_steps % ddp_world_size == 0
+    gradient_accumulation_steps //= ddp_world_size
+else:
+    # if not ddp, we are running on a single gpu, and one process
+    master_process = True
+    seed_offset = 0
+    ddp_world_size = 1
+
+
+ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
+
+if master_process:
+    os.makedirs(out_dir, exist_ok=True)
+eval_iters = 100 
+print(" fucking karpathy batch_size", batch_size)
+if True:
+    # data loader.
+    path = 'data/openwebtext/'
+    train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
+    val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
     def get_batch(split):
         data = train_data if split == 'train' else val_data
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-        if device_type == 'cuda':
-            # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
-            x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-        else:
-            x, y = x.to(device), y.to(device)
-        return x, y
+        return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
 
-    ## eval function:
-    eval_iters = 10
+    ctx =  torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
     @torch.no_grad()
     def estimate_loss(model):
         out = {}
@@ -116,11 +130,12 @@ if True:
             for k in range(eval_iters):
                 X, Y = get_batch(split)
                 with ctx:
-                    _ , loss = model(X, Y)
+                    logits, loss = model(X, Y)
                 losses[k] = loss.item()
             out[split] = losses.mean()
         model.train()
         return out
+
     # learning rate decay scheduler (cosine with warmup)
     def get_lr(it):
         # 1) linear warmup for warmup_iters steps
@@ -135,42 +150,38 @@ if True:
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
         return min_lr + coeff * (learning_rate - min_lr)
 
-    tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-    print(f"tokens per iteration will be: {tokens_per_iter:,}")
-    print(f"iterations per epoch: {len(train_data) / tokens_per_iter:,}")
+#wandb_log = False
+#if wandb_log and master_process:
+#    import wandb
+#    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+#GPT2 hf chekckpoint:
 
-
-    model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                    bias=bias, vocab_size=None, dropout=dropout)
-
-    model_args['vocab_size'] =  50257
-    model_args['bias'] = True
-
-wandb_log = False
-if wandb_log and master_process:
-    import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
-
-# GPT2 hf chekckpoint:
-
-print(f"Loading GPT2 124M")
-conf = GPTConfig(**model_args)
+# Case 1: Normy GPT
+print("GPT loading")
+GPT_state_dict = torch.load("out/GPT2.pt")
+conf = GPTConfig(**config_args)
 teacher = GPT(conf)
-sd0 = torch.load("out/GPT2.pt")
-teacher.load_state_dict(sd0)
+teacher.load_state_dict(GPT_state_dict )
+print(f"Loading to GPU")
 teacher.to(device)
-print(">> Loading DONE, computing loss")
-print(f">> Loss is {estimate_loss(teacher)}")
+print(f"Computing the loss over {eval_iters} batches of {batch_size}")
+print(f"Loss for Normyteacher is {estimate_loss(teacher)}")
 
-print("Loading KronyGPT with prune init:")
-krony_conf = KronyGPTConfig(**model_args)
+# Case 2:  Kronecker GPT 
+print("KronyGPT 1st Loading")
+krony_state_dict = torch.load("checkpoints/prune-small-batch-5-4-12_iteration_8100.pt")
+
+# small cleaning. ddp leftovers.
+for pn,p in list(krony_state_dict.items()):
+	if pn.startswith("module"):
+		krony_state_dict[pn[7:]] = krony_state_dict.pop(pn)
+
+krony_conf = KronyGPTConfig(**config_args)
 student = KronyGPT(krony_conf)
-sd1 = torch.load("out/GPT2_prune_init.pt")
-student.load_state_dict(sd1)
+student.load_state_dict(krony_state_dict )
 student.to(device)
-print(">> Loading DONE, computing loss")
-print(f">> Loss: {estimate_loss(student)}")
-
+print(f"Computing the loss over {eval_iters} batches of {batch_size}")
+print(f"Loss for student is {estimate_loss(student)}")
 
 # Teacher: layering down
 teacher_wte = teacher.transformer.wte
@@ -188,10 +199,8 @@ student_h = student.transformer.h
 student_ln_f = student.transformer.ln_f
 student_lm_head = student.lm_head
 
-project= "owt"
-name= "1 by 1"
-
-#wandb.init(project=wandb_project, name=wandb_run_name, config=config)
+if ddp:
+    student = DDP(student, device_ids=[ddp_local_rank])
 
 # training loop
 idx, targets = get_batch('train') 
@@ -200,75 +209,103 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model =  student # unwrap DDP container if needed
 running_mfu = -1.0
 
-
-iter_num = 0
-ddp = 0
-
 # Initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 optimizer = student.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
 
-
-# Freeze lab, here we decide.  Just how you love it.
-
+# freezing the weights of the teacher.
 with torch.no_grad():
     [p.requires_grad_(False) for _,p in teacher.named_parameters()]
-    #[p.requires_grad_(False) for _,p in student.named_parameters()]
 
-student_keys = list(student.state_dict().keys())
 
-def unfreeze_names(layer: int):
-    """Wtf"""
-    return [pn for pn in student_keys if any([pn.endswith("0"), pn.endswith("1")]) and f"h.{layer}." in pn]
 
-# release the _1 (size 2)
-[p.requires_grad_(True) for pn,p in student.named_parameters() if pn.endswith("_1")]
+eval_interval = 20
 
-lrr = 0.1
-print(f"mr l mf'ing r is {lrr}")
+# training loop
+X, Y = get_batch('train') # fetch the very first batch
+t0 = time.time()
+local_iter_num = 0 # number of iterations in the lifetime of this process
+raw_model = model.module if ddp else model # unwrap DDP container if needed
+running_mfu = -1.0
 
-while 1:
-    # determine and set the learning rate for this iteration
+while iter_num < cut_the_run:
+# determine and set the learning rate for this iteration
+	lr = get_lr(iter_num) if decay_lr else learning_rate
+	for param_group in optimizer.param_groups:
+		param_group['lr'] = lr
+
+	if iter_num % eval_interval == 0 and master_process:
+		losses = estimate_loss()
+		print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+		if wandb_log:
+			wandb.log({
+				"iter": iter_num,
+				"train/loss": losses['train'],
+				"val/loss": losses['val'],
+				"lr": lr
+				#"mfu": running_mfu*100, # convert to percentage
+			})
+
+	if iter_num == 0 and eval_only:
+		break
+
+# forward backward update, with optional gradient accumulation to simulate larger batch size
+# and using the GradScaler if data type is float16
+# apparently, we always use a gradient accumulation
+
+	for micro_step in range(gradient_accumulation_steps):
+		if ddp:
+			model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+		with ctx:
+			logits, loss = model(X, Y)
+			loss = loss / gradient_accumulation_steps 
+			# scale the loss to account for gradient accumulation
+		
+		# immediately async prefetch next batch while model is 
+		# doing the forward pass on the GPU >> investigate this in detail, how does it happen.
+		# new batch
+		X, Y = get_batch('train')
+		# backward pass, with gradient scaling if training in fp16
+		scaler.scale(loss).backward()
+
+# clip the gradient
+	if grad_clip != 0.0:
+		scaler.unscale_(optimizer)
+		torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+
+	scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
+	scaler.update()
+	optimizer.zero_grad(set_to_none=True)
+
+
+#	if iter_num > 1 and iter_num % 900 == 0 and master_process:
+#		print(f"Saving the checkpoint at iteration {iter_num}!")
+#		torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}_iteration_{iter_num}.pt")
+
+	iter_num += 1
+	local_iter_num += 1
+
+	if iter_num >= max_iters:
+		break
+
+if ddp:
+	destroy_process_group()
+
+while iter_num < cut_the_run:
     lr = get_lr(iter_num) if decay_lr else learning_rate
+    
     for param_group in optimizer.param_groups:
-        param_group['lr'] = lrr
-
-    """
-    # evaluate the loss on train/val sets and write checkpoints
-    if iter_num % eval_interval == 0 and master_process:
-        losses = estimate_loss()
-        #print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if wandb_log:
-            wandb.log({
-                "iter": iter_num,
-                "train/loss": losses['train'],
-                "val/loss": losses['val'],
-                "lr": lr,
-                "mfu": running_mfu*100, # convert to percentage
-            })
-        
-        if losses['val'] < 2.8 or always_save_checkpoint:
-            best_val_loss = losses['val']
-            if iter_num > 0:
-                checkpoint = {
-                    'model': raw_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'model_args': model_args,
-                    'iter_num': iter_num,
-                    'best_val_loss': best_val_loss,
-                    'config': config,
-                }
-    """ 
+        param_group['lr'] = lr
 
     for micro_step in range(gradient_accumulation_steps):
         if ddp:
             student.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
         with ctx:
-            #>> fun happens here:
             device = idx.device
             b, t = idx.size()
             assert t <= block_size, f"Cannot forward sequence of length {t}, block size is only {block_size}"
             pos = torch.arange(0, t, dtype=torch.long, device=device) 
+
             tok_emb = student.transformer.wte(idx) 
             pos_emb = student.transformer.wpe(pos) 
             x = student.transformer.drop(tok_emb + pos_emb)
@@ -281,17 +318,10 @@ while 1:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
             loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
 
-
         idx, targets = get_batch('train') 
         scaler.scale(loss).backward()
-        
-    #if iter_num % 10 == 0:
-    if iter_num % 5 == 0:
-        print(f"loss at step {iter_num} >> {loss*gradient_accumulation_steps}")
-
-    if iter_num % 70 == 0:
-        [p.requires_grad_(True) for pn,p in student.named_parameters() if pn.endswith("_0")]
-
+    if master_process == True and iter_num % 20 == 0:
+        print()
     # clip the gradient
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
@@ -303,10 +333,6 @@ while 1:
 
     iter_num += 1
     local_iter_num += 1
-    # termination conditions
-
-    if iter_num > 150:
-        break
 
 if ddp:
     destroy_process_group()

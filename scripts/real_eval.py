@@ -93,11 +93,7 @@ print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT)}")
 checks = [] 
 
 for r,d,f in os.walk("checkpoints/"):
-	i = f
-
-
-
-
+	checks = f
 
 for check in checks:
 	print(f"Eval of {check}")

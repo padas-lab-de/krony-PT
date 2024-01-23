@@ -163,7 +163,6 @@ if init_from == 'scratch':
     model_args['vocab_size'] = meta_vocab_size if meta_vocab_size is not None else 50304
     gptconf = KronyGPTConfig(**model_args)
     model = KronyGPT(gptconf)
-
 else:
     print(f"Resuming training from {init_from} {init_name}")
     ckpt_path = os.path.join(out_dir, init_name)
@@ -188,7 +187,6 @@ else:
 if block_size < model.config.block_size:
     model.crop_block_size(block_size)
     model_args['block_size'] = block_size # so that the checkpoint will have the right value
-
 
 model.to(device)
 
@@ -227,16 +225,15 @@ def estimate_loss():
 
 # adamw optimizer
 if master_process:
-    print(">>>> Some data stats")
+    print("\n >>>> Some data stats >>>> \n")
     print(f"ddp_world_size {ddp_world_size}")
     print(f"gradient blabla {gradient_accumulation_steps}")
-
     tpi = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-
     print(f"tokens per iteration will be: {tpi:,}")
     print(f"Train data size {len(train_data):_}")
-    print(f"To see all data we need {len(train_data)/tpi:.3f}%")
-    print(f"In {cut_the_run} iters. we are going to see {100*cut_the_run*tpi/len(train_data)}")
+    print(f"To see all data we need {len(train_data)/tpi:_} iterations")
+    print(f"In {cut_the_run} iters. we are going to see {cut_the_run*tpi/len(train_data):.3f} % of the data")
+    print("\n >>>> Some data stats >>>> \n")
 
     print(">>>>> Training is starting now, here is some stats:")
     print("batch size",    batch_size) 
@@ -261,8 +258,6 @@ def get_lr(it):
     assert 0 <= decay_ratio <= 1
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
     return min_lr + coeff * (learning_rate - min_lr)
-
-# logging
 
 if wandb_log and master_process:
     import wandb
@@ -292,14 +287,14 @@ while iter_num < cut_the_run:
 				"lr": lr
 				#"mfu": running_mfu*100, # convert to percentage
 			})
-		
-
 
 	if iter_num == 0 and eval_only:
 		break
 
 # forward backward update, with optional gradient accumulation to simulate larger batch size
 # and using the GradScaler if data type is float16
+# apparently, we always use a gradient accumulation
+
 	for micro_step in range(gradient_accumulation_steps):
 		if ddp:
 			model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
@@ -335,9 +330,27 @@ while iter_num < cut_the_run:
 	if iter_num >= max_iters:
 		break
 
+if master_process:
+    print("\n >>>> Some data stats >>>> \n")
+    print(f"ddp_world_size {ddp_world_size}")
+    print(f"gradient blabla {gradient_accumulation_steps}")
+    tpi = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
+    print(f"tokens per iteration will be: {tpi:,}")
+    print(f"Train data size {len(train_data):_}")
+    print(f"To see all data we need {len(train_data)/tpi:_} iterations")
+    print(f"In {cut_the_run} iters. we are going to see {cut_the_run*tpi/len(train_data):.3f} % of the data")
+    print("\n >>>> Some data stats >>>> \n")
+
+    print(">>>>> Training is starting now, here is some stats:")
+    print("batch size",    batch_size) 
+    print("weight_decay",  weight_decay)  
+    print("learning_rate", learning_rate) 
+    print("weight_decay",  weight_decay)  
+    print("min_lr",        min_lr)        
+    print("max_iters",     max_iters)     
+    print("warmup_iters",  warmup_iters)  
+  
 if ddp:
 	destroy_process_group()
-
-
 
 
