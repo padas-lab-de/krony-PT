@@ -16,8 +16,8 @@ min_lr = 6e-5
 
 
 # 
-gradient_accumulation_steps = 1*4
-batch_size = 20
+gradient_accumulation_steps = 3*4
+batch_size = 12
 
 max_iters = 600000 
 warmup_iters = 500 
@@ -26,7 +26,7 @@ lr_decay_iters = max_iters
 
 wandb_log = True 
 wandb_project = 'reported'
-wandb_run_name= "prune-small-batch-1-4-20"
+wandb_run_name= "prune-small-batch-3-4-12-dist-0"
 
 init_from = "prune"
 init_name = "GPT2_prune_init_0_001.pt"

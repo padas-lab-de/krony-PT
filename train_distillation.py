@@ -43,8 +43,6 @@ if True: # vs code, hiding stuff
 
     batch_size = 0
     block_size = config_args["block_size"]
-    device = "cuda"
-    device_type = "cuda"
 
     eval_iters = 200 # used in estimate_loss()
 
@@ -55,15 +53,14 @@ if True: # vs code, hiding stuff
     cut_the_run = 0
 
     seed_offset = 0
-    torch.manual_seed(1337 + seed_offset)
-    torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
-    torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
+    device = "cuda"
     device_type = "cuda"
     ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
     ctx = torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
     # this gets updated.
+    eval_interval = 0
     learning_rate = 1
     weight_decay = 1
     min_lr =1
@@ -75,6 +72,11 @@ if True: # vs code, hiding stuff
     beta2 = 0.95
     grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
     decay_lr = True # whether to decay the learning rate
+
+    # leftover from train.py
+
+    backend = 'nccl' # 'nccl', 'gloo', etc.
+    out_dir = 'out'
 
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -106,10 +108,13 @@ ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
-eval_iters = 100 
-print(" fucking karpathy batch_size", batch_size)
+
+torch.manual_seed(1337 + seed_offset)
+torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
+torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
+
 if True:
-    # data loader.
+    #eval_iters = 100 
     path = 'data/openwebtext/'
     train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
     val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
@@ -120,7 +125,6 @@ if True:
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
         return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
 
-    ctx =  torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
     @torch.no_grad()
     def estimate_loss(model):
         out = {}
@@ -157,20 +161,17 @@ if True:
 #GPT2 hf chekckpoint:
 
 # Case 1: Normy GPT
-print("GPT loading")
+print(">>> GPT loading, the teacher")
 GPT_state_dict = torch.load("out/GPT2.pt")
 conf = GPTConfig(**config_args)
 teacher = GPT(conf)
-teacher.load_state_dict(GPT_state_dict )
+teacher.load_state_dict(GPT_state_dict)
 print(f"Loading to GPU")
 teacher.to(device)
-print(f"Computing the loss over {eval_iters} batches of {batch_size}")
-print(f"Loss for Normyteacher is {estimate_loss(teacher)}")
 
 # Case 2:  Kronecker GPT 
-print("KronyGPT 1st Loading")
+print(">>> KronyGPT loading (the student)")
 krony_state_dict = torch.load("checkpoints/prune-small-batch-5-4-12_iteration_8100.pt")
-
 # small cleaning. ddp leftovers.
 for pn,p in list(krony_state_dict.items()):
 	if pn.startswith("module"):
@@ -180,8 +181,12 @@ krony_conf = KronyGPTConfig(**config_args)
 student = KronyGPT(krony_conf)
 student.load_state_dict(krony_state_dict )
 student.to(device)
-print(f"Computing the loss over {eval_iters} batches of {batch_size}")
-print(f"Loss for student is {estimate_loss(student)}")
+
+if master_process and False:
+    print(f">> Computing the loss over {eval_iters} batches of {batch_size}")
+    print(f"Loss for Normyteacher is {estimate_loss(teacher)}")
+    print(f">> Computing the loss over {eval_iters} batches of {batch_size}")
+    print(f"Loss for student is {estimate_loss(student)}")
 
 # Teacher: layering down
 teacher_wte = teacher.transformer.wte
@@ -199,97 +204,138 @@ student_h = student.transformer.h
 student_ln_f = student.transformer.ln_f
 student_lm_head = student.lm_head
 
-if ddp:
-    student = DDP(student, device_ids=[ddp_local_rank])
-
-# training loop
-idx, targets = get_batch('train') 
-t0 = time.time()
-local_iter_num = 0 # number of iterations in the lifetime of this process
-raw_model =  student # unwrap DDP container if needed
-running_mfu = -1.0
-
 # Initialize a GradScaler. If enabled=False scaler is a no-op
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 optimizer = student.configure_optimizers(weight_decay, learning_rate, (beta1, beta2), device_type)
+
+if ddp:
+    student = DDP(student, device_ids=[ddp_local_rank])
+
+# wandb related.
+eval_only = False # bring this up there
+wandb_log = False # .. 
+
+wandb_project  = "hallo"
+wandb_run_name = "servus"
+if wandb_log and master_process:
+    import wandb
+    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # freezing the weights of the teacher.
 with torch.no_grad():
     [p.requires_grad_(False) for _,p in teacher.named_parameters()]
 
-
-
-eval_interval = 20
-
 # training loop
 X, Y = get_batch('train') # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0 # number of iterations in the lifetime of this process
-raw_model = model.module if ddp else model # unwrap DDP container if needed
+raw_student = student.module if ddp else student # unwrap DDP container if needed
 running_mfu = -1.0
 
 while iter_num < cut_the_run:
-# determine and set the learning rate for this iteration
-	lr = get_lr(iter_num) if decay_lr else learning_rate
-	for param_group in optimizer.param_groups:
-		param_group['lr'] = lr
+    loss = 0
+    lr = get_lr(iter_num) if decay_lr else learning_rate    
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
-	if iter_num % eval_interval == 0 and master_process:
-		losses = estimate_loss()
-		print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-		if wandb_log:
-			wandb.log({
-				"iter": iter_num,
-				"train/loss": losses['train'],
-				"val/loss": losses['val'],
-				"lr": lr
-				#"mfu": running_mfu*100, # convert to percentage
-			})
+#	#if iter_num % eval_interval == 0 and master_process:
+    if master_process:
+        losses = estimate_loss(student)
+        print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        if wandb_log:
+            wandb.log({
+                "iter": iter_num,
+                "train/loss": losses['train'],
+                "val/loss": losses['val'],
+                "lr": lr
+            })
+     
+    if iter_num == 0 and eval_only:
+        break
 
-	if iter_num == 0 and eval_only:
-		break
+    for micro_step in range(gradient_accumulation_steps):
+        if ddp:
+            student.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
+        with ctx:
+            # Forward, manual, like real men
+            b, t = X.size()
+            device = X.device
+            assert t <= block_size, f"Cannot forward sequence of length {t}, block size is only {block_size}"
+            pos = torch.arange(0, t, dtype=torch.long, device=device) 
 
-# forward backward update, with optional gradient accumulation to simulate larger batch size
-# and using the GradScaler if data type is float16
-# apparently, we always use a gradient accumulation
+            # teacher forward pass
+            tok_emb = teacher.transformer.wte(X) 
+            pos_emb = teacher.transformer.wpe(pos) 
+            x_teacher = teacher.transformer.drop(tok_emb + pos_emb)
+            
+            # student forward pass
+            tok_emb = student.module.transformer.wte(X) 
+            pos_emb = student.module.transformer.wpe(pos) 
+            x = student.module.transformer.drop(tok_emb + pos_emb)
 
-	for micro_step in range(gradient_accumulation_steps):
-		if ddp:
-			model.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
-		with ctx:
-			logits, loss = model(X, Y)
-			loss = loss / gradient_accumulation_steps 
-			# scale the loss to account for gradient accumulation
-		
-		# immediately async prefetch next batch while model is 
-		# doing the forward pass on the GPU >> investigate this in detail, how does it happen.
-		# new batch
-		X, Y = get_batch('train')
-		# backward pass, with gradient scaling if training in fp16
-		scaler.scale(loss).backward()
+            #print("I am so here", x.shape, x_teacher.shape)
 
-# clip the gradient
-	if grad_clip != 0.0:
-		scaler.unscale_(optimizer)
-		torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+            loss = torch.nn.MSELoss()(x, x_teacher) 
+            if master_process:
+                print(">>>> iteration ", iter_num)
+                print(">>>> first elt", torch.nn.MSELoss()(x, x_teacher))
+            #print("I am so here", loss)
 
-	scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
-	scaler.update()
-	optimizer.zero_grad(set_to_none=True)
+            for l in range(len(teacher_h)):
+                x           = student.module.transformer.h[l](x)
+                x_teacher   = teacher.transformer.h[l](x)
+                if master_process:
+                    print(">>>> Second elt", torch.nn.MSELoss()(x, x_teacher))
+                loss += torch.nn.MSELoss()(x, x_teacher)
 
+            x = student.module.transformer.ln_f(x)
+            logits = student.module.lm_head(x)
+            entropy_loss  =  F.cross_entropy(logits.view(-1, logits.size(-1)), Y.view(-1), ignore_index=-1)/gradient_accumulation_steps
+            if master_process:
+                print(">>>> Third elt",entropy_loss)
+            loss +=  entropy_loss
 
-#	if iter_num > 1 and iter_num % 900 == 0 and master_process:
-#		print(f"Saving the checkpoint at iteration {iter_num}!")
-#		torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}_iteration_{iter_num}.pt")
+        X, Y = get_batch('train')
+        scaler.scale(loss).backward()
 
-	iter_num += 1
-	local_iter_num += 1
+    if grad_clip != 0.0:
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(student.parameters(), grad_clip)
 
-	if iter_num >= max_iters:
-		break
+    scaler.step(optimizer)
+    scaler.update()
+    optimizer.zero_grad(set_to_none=True)
 
+	#if iter_num > 1 and iter_num % 900 == 0 and master_process:
+	#	print(f"Saving the checkpoint at iteration {iter_num}!")
+	#	torch.save(student.state_dict(), f"checkpoints/{wandb_run_name}_iteration_{iter_num}.pt")
+    iter_num += 1
+    local_iter_num += 1
+    if iter_num >= max_iters:
+        break
 if ddp:
 	destroy_process_group()
+
+"""
+        with ctx:
+            device = idx.device
+            b, t = idx.size()
+            assert t <= block_size, f"Cannot forward sequence of length {t}, block size is only {block_size}"
+            pos = torch.arange(0, t, dtype=torch.long, device=device) 
+
+            tok_emb = student.transformer.wte(idx) 
+            pos_emb = student.transformer.wpe(pos) 
+            x = student.transformer.drop(tok_emb + pos_emb)
+
+            for l in range(len(teacher_h)):
+                x = student_h[l](x)
+            x = student.transformer.ln_f(x)
+
+            logits = student.lm_head(x)
+            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
+
+
 
 while iter_num < cut_the_run:
     lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -336,3 +382,5 @@ while iter_num < cut_the_run:
 
 if ddp:
     destroy_process_group()
+
+"""
