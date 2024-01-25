@@ -52,8 +52,6 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
 	scale = s[..., None, None].sqrt()
 	return u * scale, v * scale
 
-
-
 device = torch.device("cuda")
 
 # loadign ckpt
@@ -95,25 +93,28 @@ def kron_it(checkpoint, config: dict):
 				proj = f"transformer.h.{i}.mlp.c_proj_{f}_{k}" 
 				new[fc]   = cfc_h[k][f]
 				new[proj] =  cproj_h[k][f] 
-
 	return new
+
+
 
 
 # change here 
 conf = {"fc"   : (3072,384), 
 		"proj" : (384, 3072),
-		"n_factors" : 2
+		"n_factors" : 1
 }
 
 print("2. Decomposing")
 
-sd_VL_2_factors = kron_it(sd, conf)
-nms =  list(sd_VL_2_factors.keys())
+sd1 = kron_it(sd, conf)
+nms =  list(sd1.keys())
 
 for w in nms_origin:
 	if w not in nms:
-		sd_VL_2_factors[w] = sd[w]
+		sd1[w] = sd[w]
 
+
+nms2 =  list(sd1.keys())
 
 #print("3. Saving!")
 #torch.save(sd_VL_2_factors, "out/GPT2_VL_2_factors.pt")

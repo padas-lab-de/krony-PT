@@ -27,6 +27,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
 import torch.nn.functional as F
 
+#import torch.nn as nn
+
 from model_origin import GPT, GPTConfig
 from model import KronyGPT, KronyGPTConfig
 
@@ -73,6 +75,13 @@ if True: # vs code, hiding stuff
     grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
     decay_lr = True # whether to decay the learning rate
 
+    # wandb details
+    wandb_log = False
+    wandb_project = "x"
+    wandb_run_name = "x"
+    
+    init_name = "xx"
+
     # leftover from train.py
 
     backend = 'nccl' # 'nccl', 'gloo', etc.
@@ -102,7 +111,6 @@ else:
     master_process = True
     seed_offset = 0
     ddp_world_size = 1
-
 
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 
@@ -154,11 +162,9 @@ if True:
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio)) # coeff ranges 0..1
         return min_lr + coeff * (learning_rate - min_lr)
 
-#wandb_log = False
-#if wandb_log and master_process:
-#    import wandb
-#    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
-#GPT2 hf chekckpoint:
+if wandb_log and master_process:
+    import wandb
+    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
 
 # Case 1: Normy GPT
 print(">>> GPT loading, the teacher")
@@ -171,7 +177,9 @@ teacher.to(device)
 
 # Case 2:  Kronecker GPT 
 print(">>> KronyGPT loading (the student)")
-krony_state_dict = torch.load("checkpoints/prune-small-batch-5-4-12_iteration_8100.pt")
+if master_process:
+    print(f"Init of krony form {init_name}")
+krony_state_dict = torch.load(init_name)
 # small cleaning. ddp leftovers.
 for pn,p in list(krony_state_dict.items()):
 	if pn.startswith("module"):
@@ -182,7 +190,7 @@ student = KronyGPT(krony_conf)
 student.load_state_dict(krony_state_dict )
 student.to(device)
 
-if master_process and False:
+if master_process:
     print(f">> Computing the loss over {eval_iters} batches of {batch_size}")
     print(f"Loss for Normyteacher is {estimate_loss(teacher)}")
     print(f">> Computing the loss over {eval_iters} batches of {batch_size}")
@@ -211,16 +219,6 @@ optimizer = student.configure_optimizers(weight_decay, learning_rate, (beta1, be
 if ddp:
     student = DDP(student, device_ids=[ddp_local_rank])
 
-# wandb related.
-eval_only = False # bring this up there
-wandb_log = False # .. 
-
-wandb_project  = "hallo"
-wandb_run_name = "servus"
-if wandb_log and master_process:
-    import wandb
-    wandb.init(project=wandb_project, name=wandb_run_name, config=config)
-
 # freezing the weights of the teacher.
 with torch.no_grad():
     [p.requires_grad_(False) for _,p in teacher.named_parameters()]
@@ -232,14 +230,14 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_student = student.module if ddp else student # unwrap DDP container if needed
 running_mfu = -1.0
 
+eval_only = False
 while iter_num < cut_the_run:
     loss = 0
     lr = get_lr(iter_num) if decay_lr else learning_rate    
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-#	#if iter_num % eval_interval == 0 and master_process:
-    if master_process:
+    if iter_num % eval_interval == 0 and master_process:
         losses = estimate_loss(student)
         print(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
@@ -273,27 +271,32 @@ while iter_num < cut_the_run:
             pos_emb = student.module.transformer.wpe(pos) 
             x = student.module.transformer.drop(tok_emb + pos_emb)
 
-            #print("I am so here", x.shape, x_teacher.shape)
-
-            loss = torch.nn.MSELoss()(x, x_teacher) 
-            if master_process:
-                print(">>>> iteration ", iter_num)
-                print(">>>> first elt", torch.nn.MSELoss()(x, x_teacher))
-            #print("I am so here", loss)
+            loss = F.mse_loss(x, x_teacher) 
+            #if master_process:
+            #    print("\n\n >>>> iteration ", iter_num, "\n")
+            #    print("> First loss", loss)
 
             for l in range(len(teacher_h)):
                 x           = student.module.transformer.h[l](x)
-                x_teacher   = teacher.transformer.h[l](x)
-                if master_process:
-                    print(">>>> Second elt", torch.nn.MSELoss()(x, x_teacher))
-                loss += torch.nn.MSELoss()(x, x_teacher)
-
+                x_teacher   = teacher.transformer.h[l](x_teacher)
+                loss += F.mse_loss(x, x_teacher)/torch.max(x_teacher)
+                #if master_process:
+                #    print(">>>> Second elt, layer",l," > ", F.mse_loss(x, x_teacher)/torch.max(x_teacher))
+            # student
             x = student.module.transformer.ln_f(x)
-            logits = student.module.lm_head(x)
-            entropy_loss  =  F.cross_entropy(logits.view(-1, logits.size(-1)), Y.view(-1), ignore_index=-1)/gradient_accumulation_steps
-            if master_process:
-                print(">>>> Third elt",entropy_loss)
-            loss +=  entropy_loss
+            logits_student = student.module.lm_head(x)
+            loss_student =  F.cross_entropy(logits_student.view(-1, logits_student.size(-1)), Y.view(-1), 
+                                            ignore_index=-1)/gradient_accumulation_steps
+
+            # teacher, rest
+            x_teacher = teacher.transformer.ln_f(x_teacher)
+            logits_teacher = teacher.lm_head(x_teacher)
+            loss_teacher =  F.cross_entropy(logits_teacher.view(-1, logits_teacher.size(-1)), Y.view(-1), 
+                                            ignore_index=-1)/gradient_accumulation_steps
+
+            #if master_process:
+            #    print(">>>> Third elt",entropy_loss, ddp_local_rank)
+            loss += F.mse_loss(loss_teacher, loss_student)/torch.max(loss_teacher)
 
         X, Y = get_batch('train')
         scaler.scale(loss).backward()
@@ -315,72 +318,3 @@ while iter_num < cut_the_run:
         break
 if ddp:
 	destroy_process_group()
-
-"""
-        with ctx:
-            device = idx.device
-            b, t = idx.size()
-            assert t <= block_size, f"Cannot forward sequence of length {t}, block size is only {block_size}"
-            pos = torch.arange(0, t, dtype=torch.long, device=device) 
-
-            tok_emb = student.transformer.wte(idx) 
-            pos_emb = student.transformer.wpe(pos) 
-            x = student.transformer.drop(tok_emb + pos_emb)
-
-            for l in range(len(teacher_h)):
-                x = student_h[l](x)
-            x = student.transformer.ln_f(x)
-
-            logits = student.lm_head(x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
-            loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
-
-
-
-while iter_num < cut_the_run:
-    lr = get_lr(iter_num) if decay_lr else learning_rate
-    
-    for param_group in optimizer.param_groups:
-        param_group['lr'] = lr
-
-    for micro_step in range(gradient_accumulation_steps):
-        if ddp:
-            student.require_backward_grad_sync = (micro_step == gradient_accumulation_steps - 1)
-        with ctx:
-            device = idx.device
-            b, t = idx.size()
-            assert t <= block_size, f"Cannot forward sequence of length {t}, block size is only {block_size}"
-            pos = torch.arange(0, t, dtype=torch.long, device=device) 
-
-            tok_emb = student.transformer.wte(idx) 
-            pos_emb = student.transformer.wpe(pos) 
-            x = student.transformer.drop(tok_emb + pos_emb)
-
-            for l in range(len(teacher_h)):
-                x = student_h[l](x)
-            x = student.transformer.ln_f(x)
-
-            logits = student.lm_head(x)
-            loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
-            loss = loss / gradient_accumulation_steps # scale the loss to account for gradient accumulation
-
-        idx, targets = get_batch('train') 
-        scaler.scale(loss).backward()
-    if master_process == True and iter_num % 20 == 0:
-        print()
-    # clip the gradient
-    if grad_clip != 0.0:
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(student.parameters(), grad_clip)
-
-    scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
-    scaler.update()
-    optimizer.zero_grad(set_to_none=True)
-
-    iter_num += 1
-    local_iter_num += 1
-
-if ddp:
-    destroy_process_group()
-
-"""
