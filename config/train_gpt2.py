@@ -25,6 +25,7 @@ wandb_project = 'distil'
 wandb_run_name= "prune-init-3-3-12-cosine-lr"
 
 init_from = "prune"
-init_name = "GPT2_prune_init_0_001.pt"
+init_name = "out/GPT2_prune_init_0_001.pt"
+
 
 #init_name  = "checkpoints/prune-small-batch-5-4-12_iteration_8100.pt"

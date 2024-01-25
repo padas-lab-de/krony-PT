@@ -247,7 +247,12 @@ while iter_num < cut_the_run:
                 "val/loss": losses['val'],
                 "lr": lr
             })
-     
+
+    if iter_num > 0 and iter_num % 990 == 0 and master_process:
+        print(">> saving checkpoint at iter ", iter_num)
+        torch.save(student.state_dict(), f"checkpoints/{wandb_run_name}_iter_{iter_num}.pt")
+
+
     if iter_num == 0 and eval_only:
         break
 
