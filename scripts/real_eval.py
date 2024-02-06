@@ -28,7 +28,6 @@ batch_size = 12
 block_size = config_args["block_size"]
 device = "cuda"
 device_type = "cuda"
-
 eval_iters = 200 # used in estimate_loss()
 
 
@@ -59,18 +58,39 @@ def estimate_loss(model):
 	model.train()
 	return out
 
-
 # Case 1: Normy GPT
 print("GPT loading")
 GPT_state_dict = torch.load("out/GPT2.pt")
 conf = GPTConfig(**config_args)
-GPT = GPT(conf)
-GPT.load_state_dict(GPT_state_dict )
-print(f"Loading to GPU")
-GPT.to(device)
-print(f"Computing the loss over {eval_iters} batches of 12")
-print(f"Loss for NormyGPT is {estimate_loss(GPT)}")
+GPT0 = GPT(conf)
+GPT0.load_state_dict(GPT_state_dict)
 
+
+def divs(number):
+	return np.arange(1, number + 1)[number % np.arange(1, number + 1) == 0]
+
+n,m = 3072, 768
+div1 = divs(n)
+div2 = divs(m)
+
+all_c= [[
+min(n//i,m//j)*min(i,j), (n//i*m//j)+(i*j), {"A":(n//i,m//j),"B":(i,j)}
+] for i in div1 for j in div2]
+
+all_c_768 = [i for i in all_c if i[0] == 768]
+
+xx = sorted(all_c_768, key = lambda x : x[1])
+
+print(f"{'Rank':<10}{'Num':<10}{'A-m_1':<12}{'A-n_1':<8}{'B-m_1':<8}{'B-n_1':<8}")
+for i in xx:
+	print(f"{i[0]:<10}{i[1]:<10_}{i[2]['A'][0]:<12}{i[2]['A'][1]:<8}{i[2]['B'][0]:<8}{i[2]['B'][1]:<8}")
+
+#GPT.to(device)
+#print(f"Computing the loss over {eval_iters} batches of 12")
+#print(f"Loss for NormyGPT is {estimate_loss(GPT)}")
+
+
+"""
 # Case 2:  Kronecker GPT 
 print("KronyGPT 1st Loading")
 krony_state_dict = torch.load("checkpoints/gpt2-prune-lr-same-all-batch-12.pt")
@@ -80,36 +100,52 @@ for pn,p in list(krony_state_dict.items()):
 	if pn.startswith("module"):
 		krony_state_dict[pn[7:]] = krony_state_dict.pop(pn)
 
+config_args["dim1"] = 3072
+config_args["dim2"] = 384
+
 krony_conf = KronyGPTConfig(**config_args)
-KronyGPT = KronyGPT(krony_conf)
-KronyGPT.load_state_dict(krony_state_dict )
+KronyGPT0 = KronyGPT(krony_conf)
+KronyGPT0.load_state_dict(krony_state_dict)
 
-print("Loading to GPU")
-KronyGPT.to(device)
-print(f"Computing the loss over {eval_iters} batches of 12")
-print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT)}")
+#print("Loading to GPU")
+#KronyGPT0.to(device)
+#print(f"Computing the loss over {eval_iters} batches of 12")
+#print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT0)}")
+
+# >> checkpoint #2
+checkpt = "VL1.pt"
+krony_state_dict1 = torch.load(f"out/{checkpt}")
+#  >> checkpoint #3
+checkpt = "VL2.pt"
+krony_state_dict2 = torch.load(f"out/{checkpt}")
+
+#l_keys  = list(krony_state_dict.keys())
+#l_keys1 = list(krony_state_dict1.keys())
+#l_keys2 = list(krony_state_dict2.keys())
+#[krony_state_dict1.pop(ky) for ky in l_keys1 if ky not in l_keys]
+#[krony_state_dict2.pop(ky) for ky in l_keys2 if ky not in l_keys]
 
 
-checks = [] 
+print(f"saving some stuff") 
 
-for r,d,f in os.walk("checkpoints/"):
-	checks = f
+#torch.save(krony_state_dict1, "out/VL1.pt")
+#torch.save(krony_state_dict2, "out/VL2.pt")
+#assert len(krony_state_dict1.keys()) == len(krony_state_dict.keys())
+#assert len(krony_state_dict2.keys()) == len(krony_state_dict.keys())
 
-for check in checks:
-	print(f"Eval of {check}")
-	sd = torch.load(f"checkpoints/{check}.pt")
+config_args["dim1"] = 128 
+config_args["dim2"] = 32 
+krony_conf1 = KronyGPTConfig(**config_args)
+KronyGPT1 = KronyGPT(krony_conf1)
+KronyGPT1.load_state_dict(krony_state_dict1)
 
-	for pn,p in list(krony_state_dict.items()):
-		if pn.startswith("module"):
-			sd[pn[7:]] = sd.pop(pn)
+config_args["dim1"] = 96 
+config_args["dim2"] = 24
+krony_conf1 = KronyGPTConfig(**config_args)
+KronyGPT2 = KronyGPT(krony_conf1)
+KronyGPT2.load_state_dict(krony_state_dict2)
 
-	KronyGPT.load_state_dict(krony_state_dict)
 
-	print(f"Computing the loss over {eval_iters} batches of 12")
-	print(f"Loss for KronyGPT2 with VL init is {estimate_loss(KronyGPT)}")
-
-"""
-## generation stuff
 
 import tiktoken
 import os

@@ -1,57 +1,25 @@
 This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nanoGPT/) :goat:.
 
 ### ToC:
+* [DONE](#done)
+* [TODO](#todo)
+
 * [Goals](#goals)
 * [Progress](#progress)
-* [TODO](#todo)
-* [DONE](#done)
 * [Misc](#misc)
-
----
-### Goals: <a name="goals">
-
-Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 steps, approx. takes 30 min. (starting from the hf checkpoint)
-
-1. Factorize single weight matrices into a product of Kroneckers.
-2. Test scaling of distillation / training. With different strategies.
-3. Test impact of adding multiple Kroneckers factors.
-4. Test if weight freezing has any significance to post-training or distillation.
-
----
-### **Progress**  <a name="progress">
-
-* Now, I exclusively work on GPT2 now, and I'm testing different setups.
-* 50% deterministic (either pick even or odd rows) prunning works way better than any other initialization.
-* Main thing to be done next: Update the optimizer, and have different learning rates for new params and already trained parameters.
-
-* [Link to wandb logs](https://wandb.ai/benayad7/freezing-test?workspace=user-benayad7)
-* [New experiments](https://wandb.ai/benayad7/new_lr?workspace=user-benayad7)
-
-
-* Why move to GPT2: I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
-
-**Some remarks:** 
-
-* GPT2 takes approx 20GB of memory. 
-* Initial loss is 10.9886 10.9898. with random init.
-* HF checkpoint is 3.11 approx (on open web text)
 
 ---
 ### **TODO:** <a name="todo">
 
-* debug distil:
-	* normalize the losses 
-	* check other papers. 
-	
-* Priority:
-	1. re-run everything.
-	2. Distillation, make it wor
-		* f'ing ddp again
-	3. Eval, perplpexity
+* Since now we have a 67M model (with the lower decompostions). We can add more factors and keep the #of parameters less than 87M. 
 
-* Can you check all good checkpoints and see what's up.
+* Training-idea: start from a 3.3 checkpoint (67M model), and retrain using a really high rate, and as much batch size as possible. 
 
-* Setup -- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
+* **Idea:** Do the VL decompostion on the 3.17 VL checkpoint and not the original checkpoint. Because they have the same rank.  (Not really, they have the same rank, as the original matrix, 768)
+
+* Write report on new decompositions  and trad-off.
+
+* EVAL --- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
 	* Compare results of GPT2 - HF.
 	* And some 95M that you trained.
 	* this pytorch life is too much hustle, just migrate to HF.
@@ -65,12 +33,6 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* Try a schedule of 600000k for the KP weights. >>>>> This ASAAAAAP [DONE]
 	* Try the random baseline, random inits as 
 
-* Prototyping on Shakespeare -- evening kinda fun. 
-	* Small thing increments.
-	* Load everything from config script [DONE]
-	* Save some checkpoints, save them locally. [DONE]
-	* See how everything is changing overtime.
-	* Need to start retraining for more time. At least 1 epoch. [ so far, I train for 0.5%, in the paper they train for 10%]
 
 * 2 factors with pruning:
 	* decompose and test correctness.
@@ -120,6 +82,19 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 	* Van Loan is a shitty init (make this friendly). 
 
 ### **DONE**    <a name="done">
+
+* Prototyping on Shakespeare -- evening kinda fun. [DONE]
+	* Load everything from config script [DONE]
+	* Save some checkpoints, save them locally. [DONE]
+	* Need to start retraining for more time. At least 1 epoch. [ so far, I train for 0.5%, in the paper they train for 10%]
+
+* Other decompositions.
+	* Decompose [DONE]
+	* Test [DONE] 
+
+* Debug distil: [DONE]
+	* normalize the losses 
+	* check other papers. 
 
 * Investigate batch_size and nproc_per_node impact on n_tokens and %epoch [DONE]
 	* write a section on it.
@@ -241,6 +216,36 @@ Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 
 
 * Mixture of Experts as krone decomp? does it make sense?
 
+---
+### Goals: <a name="goals">
+
+Main goal: Getting under 3.00 loss on owt with Kronecker Products and under 300 steps, approx. takes 30 min. (starting from the hf checkpoint)
+
+1. Factorize single weight matrices into a product of Kroneckers.
+2. Test scaling of distillation / training. With different strategies.
+3. Test impact of adding multiple Kroneckers factors.
+4. Test if weight freezing has any significance to post-training or distillation.
+
+---
+### **Progress**  <a name="progress">
+
+* Now, I exclusively work on GPT2 now, and I'm testing different setups.
+* 50% deterministic (either pick even or odd rows) prunning works way better than any other initialization.
+* Main thing to be done next: Update the optimizer, and have different learning rates for new params and already trained parameters.
+
+* [Link to wandb logs](https://wandb.ai/benayad7/freezing-test?workspace=user-benayad7)
+* [New experiments](https://wandb.ai/benayad7/new_lr?workspace=user-benayad7)
+
+
+* Why move to GPT2: I feel like the small model (10M param  with characters) is very unreliable. I can literally get the model to do anything I want with more training. I'll just switch all my focus on GPT2 124M model. And only play with the other one for prototyping.
+
+**Some remarks:** 
+
+* GPT2 takes approx 20GB of memory. 
+* Initial loss is 10.9886 10.9898. with random init.
+* HF checkpoint is 3.11 approx (on open web text)
+
+---
 ### Details
 
 * Repo structure now:

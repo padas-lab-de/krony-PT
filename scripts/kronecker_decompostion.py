@@ -59,8 +59,12 @@ print("1. Loading GPT2 3.11 loss")
 
 sd = torch.load('out/GPT2.pt', map_location=device)
 nms_origin = list(sd.keys())
+nn = list(sd.keys())
 
 def kron_it(checkpoint, config: dict):
+	print(f"This will return two factors of dims {config['dim']} \
+     and {(3072//config['dim'][0], 768//config['dim'][1])}")
+
 	n_layer = 12      
 	fac = config["n_factors"]
 	new = dict()
@@ -71,21 +75,22 @@ def kron_it(checkpoint, config: dict):
 
 		cfc_h = kronecker_decompose(
 			checkpoint[c_fc_key],
-			config["fc"][0],
-			config["fc"][1],
+			config["dim"][0],
+			config["dim"][1],
 			k = fac
 			)
 
 		cproj_h = kronecker_decompose(
 			checkpoint[c_proj_key],
-			config["proj"][0],
-			config["proj"][1],
+			config["dim"][1],
+			config["dim"][0],
 			k = fac
 			)
 
 		# cleaning the original checkpoint.
-		nms_origin.remove(c_fc_key)
-		nms_origin.remove(c_proj_key)
+		if c_fc_key in nms_origin:
+			nms_origin.remove(c_fc_key)
+			nms_origin.remove(c_proj_key)
 
 		for f in range(fac):
 			for k in range(2):
@@ -95,36 +100,30 @@ def kron_it(checkpoint, config: dict):
 				new[proj] =  cproj_h[k][f] 
 	return new
 
-
-
-
 # change here 
-conf = {"fc"   : (3072,384), 
-		"proj" : (384, 3072),
-		"n_factors" : 1
+conf = {"dim"   : (64, 24),  # the dims of A (m_1, n_1) following latex notation
+		 "n_factors" : 1
 }
 
 print("2. Decomposing")
-
-sd1 = kron_it(sd, conf)
-nms =  list(sd1.keys())
-
+sd_VL = kron_it(sd, conf)
+nms = list(sd_VL.keys())
 for w in nms_origin:
 	if w not in nms:
-		sd1[w] = sd[w]
+		sd_VL[w] = sd[w]
 
+print(len(sd_VL.keys()))
+print(len(sd.keys()))
 
-nms2 =  list(sd1.keys())
+# delete this bias, not sure when this error appeared. 
+b =  [i for i in sd.keys() if any([i.endswith("mlp.c_proj.bias"), i.endswith("mlp.c_fc.bias")])]
+for i in b:
+	sd_VL.pop(i)
 
-#print("3. Saving!")
-#torch.save(sd_VL_2_factors, "out/GPT2_VL_2_factors.pt")
+print(len(sd_VL.keys()))
 
-
-
-
-
-
-
+print("3. Saving!")
+torch.save(sd_VL, "out/sd_VL_3072.pt")
 
 """
 nms = list(sd.keys())

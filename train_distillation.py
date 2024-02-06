@@ -277,17 +277,13 @@ while iter_num < cut_the_run:
             x = student.module.transformer.drop(tok_emb + pos_emb)
 
             loss = F.mse_loss(x, x_teacher) 
-            #if master_process:
-            #    print("\n\n >>>> iteration ", iter_num, "\n")
-            #    print("> First loss", loss)
 
             for l in range(len(teacher_h)):
                 x           = student.module.transformer.h[l](x)
                 x_teacher   = teacher.transformer.h[l](x_teacher)
                 loss += F.mse_loss(x, x_teacher)/torch.max(x_teacher)
-                #if master_process:
-                #    print(">>>> Second elt, layer",l," > ", F.mse_loss(x, x_teacher)/torch.max(x_teacher))
-            # student
+            
+			# student
             x = student.module.transformer.ln_f(x)
             logits_student = student.module.lm_head(x)
             loss_student =  F.cross_entropy(logits_student.view(-1, logits_student.size(-1)), Y.view(-1), 
@@ -299,20 +295,19 @@ while iter_num < cut_the_run:
             loss_teacher =  F.cross_entropy(logits_teacher.view(-1, logits_teacher.size(-1)), Y.view(-1), 
                                             ignore_index=-1)/gradient_accumulation_steps
 
-            #if master_process:
-            #    print(">>>> Third elt",entropy_loss, ddp_local_rank)
             loss += F.mse_loss(loss_teacher, loss_student)/torch.max(loss_teacher)
 
         X, Y = get_batch('train')
         scaler.scale(loss).backward()
 
-    if grad_clip != 0.0:
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(student.parameters(), grad_clip)
 
     scaler.step(optimizer)
     scaler.update()
     optimizer.zero_grad(set_to_none=True)
+
+    if grad_clip != 0.0:
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(student.parameters(), grad_clip)
 
 	#if iter_num > 1 and iter_num % 900 == 0 and master_process:
 	#	print(f"Saving the checkpoint at iteration {iter_num}!")

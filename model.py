@@ -16,6 +16,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+from typing import List
+
 import torch._dynamo
 torch._dynamo.config.suppress_errors = True
 
@@ -96,18 +98,22 @@ class MLP(nn.Module):
 class KronyMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-        # 48*32  ////  32*12
+
         self.factors = config.factors
-        #self.dim = config.dim
-
-        # see if you later have a super parameter as torch.stack().. TODO
-
+        self.dim1 = config.dim_1
+        self.dim2 = config.dim_2
+        # clean this mess ASAP, bitte, danke!
+        
         for f in range(config.factors): # each f is one factor 
             #for i in range(1,3):  # W_1 x W_2
-            setattr(self, f"c_fc_{f}_0"  , nn.Parameter(torch.normal(0, 0.02, size=(3072,384))))
-            setattr(self, f"c_proj_{f}_0",   nn.Parameter(torch.normal(0, 0.02, size=(384,3072))))
-            setattr(self, f"c_fc_{f}_1"  , nn.Parameter(torch.normal(0, 0.02, size=(1,2))))
-            setattr(self, f"c_proj_{f}_1",   nn.Parameter(torch.normal(0, 0.02, size=(2,1))))
+            setattr(self, f"c_fc_{f}_0"  ,   nn.Parameter(torch.normal(0, 0.02, 
+                                                                       size   = [self.dim1, self.dim2])))
+            setattr(self, f"c_fc_{f}_1"  ,   nn.Parameter(torch.normal(0, 0.02,
+                                                                        size   = [3072//self.dim1, 768//self.dim2])))
+            setattr(self, f"c_proj_{f}_0",   nn.Parameter(torch.normal(0, 0.02,
+                                                                        size   = [self.dim2, self.dim1])))
+            setattr(self, f"c_proj_{f}_1",   nn.Parameter(torch.normal(0, 0.02,
+                                                                        size   = [768//self.dim2, 3072//self.dim1])))
 
         self.gelu    = nn.GELU()
         self.dropout = nn.Dropout(config.dropout)
@@ -150,6 +156,8 @@ class KronyGPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    dim_1: int = 19
+    dim_2: int = 18
     factors: int = 1
 
 class KronyGPT(nn.Module):
@@ -262,6 +270,7 @@ class KronyGPT(nn.Module):
             'gpt2-large':   dict(n_layer=36, n_head=20, n_embd=1280), # 774M params
             'gpt2-xl':      dict(n_layer=48, n_head=25, n_embd=1600), # 1558M params
         }[model_type]
+
         print("forcing vocab_size=50257, block_size=1024, bias=True")
         config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
         config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints

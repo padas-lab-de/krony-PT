@@ -75,11 +75,13 @@ if True:
     beta2 = 0.95
     grad_clip = 1.0 # clip gradients at this value, or disable if == 0.0
     decay_lr = True # whether to decay the learning rate
+    dim1 = 17
+    dim2 = 177
 
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
-config = {k: globals()[k] for k in config_keys} # will be useful for logging
 
+config = {k: globals()[k] for k in config_keys} # will be useful for logging
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 
 if ddp:
@@ -107,7 +109,7 @@ ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 
-torch.manual_seed(1337 + seed_offset)
+torch.manual_seed(177 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
@@ -148,7 +150,8 @@ if os.path.exists(meta_path):
 
 # model init 
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout) # start with model_args from command line
+                  bias=bias, vocab_size=None, dropout=dropout, dim_1=dim1, dim_2=dim2
+                  ) # start with model_args from command line
 
 ## params loading scratch / resume of gpt2
 if init_from == 'scratch':
@@ -161,9 +164,13 @@ if init_from == 'scratch':
     gptconf = KronyGPTConfig(**model_args)
     model = KronyGPT(gptconf)
 else:
-    print(f"Resuming training from {init_from} {init_name}")
-    ckpt_path = os.path.join(out_dir, init_name)
-    checkpoint = torch.load(ckpt_path, map_location=device)
+    print(f"Resuming training from {init_name}")
+    #ckpt_path = os.path.join(out_dir, init_name)
+    checkpoint = torch.load(init_name, map_location=device)
+
+    for pn,p in list(checkpoint.items()):
+        if pn.startswith("module"):
+            checkpoint[pn[7:]] = checkpoint.pop(pn)
 
     # the checkpoints I'm saving are only weights. I might change this behavior later.
     #checkpoint_model_args = checkpoint['model_args']
@@ -171,14 +178,14 @@ else:
     #    model_args[k] = checkpoint_model_args[k]
 
     # create the model
+    #model_args["dim1"] = dim1
+    #model_args["dim2"] = dim2
     model_args['vocab_size'] = 50257
     model_args['bias'] = True
 
     gptconf = KronyGPTConfig(**model_args)
+        
     model = KronyGPT(gptconf)
-    #state_dict = checkpoint['model']
-    #model.load_state_dict(state_dict)
-
     model.load_state_dict(checkpoint)
 
 if block_size < model.config.block_size:

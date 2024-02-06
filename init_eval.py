@@ -1,8 +1,10 @@
 """
 Evaluation of KronyGPT with 3 initializations:
-1. Van Loan.
-2. Random.
-3. MaxPooling with tricky trick.
+
+	1. Van Loan.
+	2. Random.
+	3. Prunnig
+
 """
 
 import numpy as np
@@ -90,22 +92,16 @@ krony_gpt.to(device)
 print(f"Loss for KronyGPT with VL init is {estimate_loss(krony_gpt)}")
 
 # GPT2 with Kronecker & Random init
-
 # write custom code for inits
 # write custom code for lr
-
 
 # GPT2 with Kronecker & simple 1/2 prunning init
 print("Loading KronyGPT with prune 1/2 init:")
 sd_prune = torch.load("out/GPT2_prune_init.pt")
 print(">> Loading DONE")
 
-
-
 krony_gpt_prune = KronyGPT(krony_conf)
 krony_gpt_prune.load_state_dict(sd_prune)
 krony_gpt_prune.to(device)
 print(f"Loss for KronyGPT with prune 1/2 init {estimate_loss(krony_gpt_prune)}")
-
-
 
