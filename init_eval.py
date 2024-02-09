@@ -1,23 +1,20 @@
 """
-Evaluation of KronyGPT with 3 initializations:
-
-	1. Van Loan.
-	2. Random.
-	3. Prunnig
-
+Evaluation / Small lab to init fast. 
+* I want to load
+* And generate
+* And even, eval here.
 """
 
 import numpy as np
 import torch
 import torch.nn as nn
-
 from torch.nn import functional as F
-from transformers import GPT2LMHeadModel
 
+import tiktoken
 from model_origin import *
 from model import *
+from eval_wrapper import *
 
-# TRY to keep this script self-contained > testing different setting for init.
 
 if True:
     # put some vars here.
@@ -33,20 +30,20 @@ if True:
     block_size = config_args["block_size"]
     device = "cuda"
     device_type = "cuda"
-    eval_iters = 200
+    eval_iters = 30
+    batch_size = 32
 
-if True: # data loader here AND estimate loss.
     path = 'data/openwebtext/'
     train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
     val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
-
-    batch_size = 12
     def get_batch(split):
         data = train_data if split == 'train' else val_data
         ix = torch.randint(len(data) - block_size, (batch_size,))
         x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
         y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
         return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+
+    ctx =  torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
 
     @torch.no_grad()
     def estimate_loss(model):
@@ -64,44 +61,52 @@ if True: # data loader here AND estimate loss.
         return out
 
 
-# Case 1: Normy GPT
+
+print("Loading the model, hun!")
 conf = GPTConfig(**config_args)
-normy_gpt = GPT(conf)
-
-# loading the checkpoints
+model = GPT(conf)
 checkpoint = torch.load("out/GPT2.pt")
-normy_gpt.load_state_dict(checkpoint)
+model.load_state_dict(checkpoint)
+model.to(device)
 
-ctx =  torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
+# TODO: this has to move to a proper file. Soon hun,
 
-# Normy Loss.
-normy_gpt.to(device)
-print(f"Loss for NormyGPT is {estimate_loss(normy_gpt)}")
+num_samples = 5
+max_new_tokens = 100
+temperature = 0.8
+top_k = 200
 
-# Case 2:  Kronecker & VL init.
-print("KronyGPT with VL init:")
-sd = torch.load("out/GPT2_VL11.pt")
-print(">> Loading DONE")
+# change this hun
+start = "The founder of SpaceX and Tesla is " 
+print(f"Now we generate {num_samples} samples to of the following prompt: {start}")
 
-# this would would be the same for all.
-krony_conf = KronyGPTConfig(**config_args)
 
-krony_gpt = KronyGPT(krony_conf)
-krony_gpt.load_state_dict(sd)
-krony_gpt.to(device)
-print(f"Loss for KronyGPT with VL init is {estimate_loss(krony_gpt)}")
 
-# GPT2 with Kronecker & Random init
-# write custom code for inits
-# write custom code for lr
+enc = tiktoken.get_encoding("gpt2")
+encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
+decode = lambda l: enc.decode(l)
 
-# GPT2 with Kronecker & simple 1/2 prunning init
-print("Loading KronyGPT with prune 1/2 init:")
-sd_prune = torch.load("out/GPT2_prune_init.pt")
-print(">> Loading DONE")
+gen = CustomGeneration(model, encode, config_args)
 
-krony_gpt_prune = KronyGPT(krony_conf)
-krony_gpt_prune.load_state_dict(sd_prune)
-krony_gpt_prune.to(device)
-print(f"Loss for KronyGPT with prune 1/2 init {estimate_loss(krony_gpt_prune)}")
+start_ids = encode(start)
+x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
 
+
+# this should be handled internally with Instances.
+
+cfn = {"max_new_tokens" : 100, "temperature" : 0.8, "top_k" : 200}
+likelihood_reqs = [
+   ("Who is Elon Musk", cfn),
+   ("Who owns Google? Good question, the answer is", cfn)
+] 
+
+# run generation
+with torch.no_grad():
+    with ctx:
+        for k in range(1):
+            #y = model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
+            y = gen.generate_until(likelihood_reqs)
+            print("still printing instead of debug? yes >>", type(y[0]), type(y[1]), y[0].shape, y[1].shape)
+            for i in y:
+                print(decode(i[0].tolist()))
+            print('|---------------|')
