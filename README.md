@@ -20,6 +20,8 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 * Write report on new decompositions  and trad-off.
 
 * EVAL --- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
+	* Make the interface (3 functions) work.
+	* Test the Instances.
 	* Compare results of GPT2 - HF.
 	* And some 95M that you trained.
 	* this pytorch life is too much hustle, just migrate to HF.

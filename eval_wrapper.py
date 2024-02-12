@@ -1,10 +1,13 @@
+
 import torch
 import torch.nn as nn
 
 from torch.nn import functional as F
 from model_origin import GPT
 
-class CustomGeneration():
+from lm_eval.api.model import LM
+
+class CustomGeneration(LM):
 	def __init__(self, model, tokenizer, conf):
 		self.model = model
 		self.tokenizer = tokenizer
@@ -29,33 +32,51 @@ class CustomGeneration():
 	def generate_until(self, requests):
 		outputs = []
 		for request in requests:
-			input_str, generation_params = request.args[0], request.args[1]
-			input_ids = torch.tensor([self.tokenizer(input_str, add_special_tokens=True)]).to(self.device)
+			#input_str, generation_params = request.args[0], request.args[1]
+			input_str, generation_params = request[0], request[1]
+
+			input_ids = torch.tensor([self.tokenizer(input_str)]).to(self.device)
+
 			max_new_tokens = generation_params.get("max_gen_toks", 128)
 			temperature = generation_params.get("temperature", 1.0)
 			top_k = generation_params.get("top_k", None)
-			outputs.append(self._generate(input_ids, max_new_tokens, temperature, top_k))
+			
+			outputs.append(self.generate(input_ids, max_new_tokens, temperature, top_k))
 		return outputs
 
+
+
 	def loglikelihood(self, requests):
+		"""
+ 		"""
 		log_probs = []
 		is_greedy = []
 		for request in requests:
-			input_str, target_str = request.args[0], request.args[1]
-			input_ids = torch.tensor([self.tokenizer(input_str, add_special_tokens=True)]).to(self.device)
-			target_ids = torch.tensor([self.tokenizer(target_str, add_special_tokens=False)]).to(self.device)
-			logits, _ = self.model(input_ids, labels=target_ids[:, :-1])
+			#input_str, target_str = request.args[0], request.args[1]
+			input_str, target_str = request[0], request[1] # both supposed to be strings here
+
+			# just tokenizing both input and targer	
+			input_ids = torch.tensor([self.tokenizer(input_str)]).to(self.device)
+			target_ids = torch.tensor([self.tokenizer(target_str)]).to(self.device)
+
+			logits, _ = self.model(input_ids, labels=target_ids[:, :-1]) # why ?
 			log_probs_t = torch.gather(logits, 2, target_ids[:, 1:].unsqueeze(2)).squeeze()
 			log_probs.append(-log_probs_t.sum().item())
 			is_greedy.append(torch.argmax(logits[:, -1, :], dim=-1).eq(target_ids[:, -1]).item())
+
 		return [(lp, ig) for lp, ig in zip(log_probs, is_greedy)]
 
 	def loglikelihood_rolling(self, requests):
 		log_probs = []
 		for request in requests:
-			input_str = request.args[0]
-			input_ids = torch.tensor([self.tokenizer(input_str, add_special_tokens=True)]).to(self.device)
-			eos_index = self.tokenizer.eos_token_id
+			#input_str = request.args[0]
+			input_str = request[0]
+
+			input_ids = torch.tensor([self.tokenizer(input_str)]).to(self.device)
+
+			# this needs a quick fix, check the prepare.py file // DONE
+			eos_index = self.tokenizer.eot_token
+
 			logits, _ = self.model(input_ids)
 			log_probs_t = torch.logsumexp(logits[:, -1, :] - torch.log(torch.tensor([self.model.config.vocab_size], device=self.device)), dim=-1)
 			log_probs.append(-log_probs_t.item())
@@ -80,42 +101,6 @@ If these assumptions are not correct, you'll need to modify the code accordingly
 
 
 
-class MyCustomLM(GPT2LMHeadModel):
-    def __init__(self, model_path, max_new_tokens=100, temperature=1.0, top_k=None, eot_token="\n\n", max_gen_toks=128):
-        super().__init__(model_path)
-        self.tokenizer = GPT2TokenizerFast.from_pretrained(self.config.model_name_or_path)
-        self.config = self.tokenizer.model_init().config
-        self.max_new_tokens = max_new_tokens
-        self.temperature = temperature
-        self.top_k = top_k
-        self.eot_token = eot_token
-        self.max_gen_toks = max_gen_toks
-
-    def loglikelihood(self, requests: list[Instance]) -> list[tuple[float, bool]]:
-        # Calculate loglikelihood for each request
-        results = []
-        for request in requests:
-            input_ids = request.input_ids
-            target = request.target
-            with torch.no_grad():
-                output = self(input_ids, labels=target)
-                loss = output.loss
-                ll = output.logits.softmax(-1).log()
-                is_greedy = torch.argmax(output.logits, dim=-1).item() == target.argmax()
-                results.append((ll.item(), is_greedy))
-        return results
-
-    def loglikelihood_rolling(self, requests: list[Instance]) -> list[tuple[float, bool]]:
-        # Calculate loglikelihood for each request
-        results = []
-        for request in requests:
-            input_ids = request.input_ids
-            with torch.no_grad():
-                output = self(input_ids)
-                ll = output.logits.softmax(-1).log()
-                is_greedy = torch.argmax(output.logits, dim=-1).item() == request.target.argmax()
-                results.append((ll.item(), is_greedy))
-        return results
 
 # Example usage
 model_path = "path/to/your/model"
