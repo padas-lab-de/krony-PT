@@ -32,9 +32,8 @@ class CustomGeneration(LM):
 	def generate_until(self, requests):
 		outputs = []
 		for request in requests:
-			#input_str, generation_params = request.args[0], request.args[1]
-			input_str, generation_params = request[0], request[1]
-
+			# input, params and encoding 
+			input_str, generation_params = request.args[0], request.args[1]
 			input_ids = torch.tensor([self.tokenizer(input_str)]).to(self.device)
 
 			max_new_tokens = generation_params.get("max_gen_toks", 128)
@@ -84,7 +83,64 @@ class CustomGeneration(LM):
 
 
 """
-Here, we define a MyCustomLM class that takes your GPT2 model as input 
+
+Generate:
+
+input  >> 
+output >> 
+
+
+from dataclasses import dataclass, field
+from typing import Literal, Tuple
+
+
+@dataclass
+class Instance:
+    request_type: Literal[
+        "loglikelihood",
+        "loglikelihood_rolling",
+        "generate_until",
+        "multiple_choice",
+    ]
+    doc: dict
+    arguments: tuple
+    idx: int
+    metadata: Tuple[str, int, int] = field(
+        default_factory=lambda: (None, None, None)
+    )
+    resps: list = field(default_factory=list)
+    filtered_resps: dict = field(default_factory=dict)
+
+    task_name: str = None
+    doc_id: str = None
+    repeats: str = None
+
+    def __post_init__(self) -> None:
+        self.task_name, self.doc_id, self.repeats = self.metadata
+
+    @property
+    def args(self):
+        return (
+            self.arguments if isinstance(self.arguments, tuple) else (self.arguments,)
+        )
+
+
+# Creating 5 instances with the specified parameters
+instances = [
+    Instance(
+        request_type="generate_until",
+        doc={},
+        arguments=("max_new_tokens=100", "temperature=0.8", "top_k=200"),
+        idx=i
+    ) for i in range(5)
+]
+
+instances
+
+
+
+Here, we define a MyCustomLM class 
+that takes your GPT2 model as input 
 and initializes it in evaluation mode. 
 
 We also define a _generate method that takes care of generating
@@ -99,13 +155,13 @@ token IDs, so I wrapped the input IDs in a batch with size 1 using unsqueeze(0).
 Also, I assumed that your tokenizer is a PreTrainedTokenizer instance from the Hugging Face transformers library.
 If these assumptions are not correct, you'll need to modify the code accordingly.
 
-
-
-
 # Example usage
 model_path = "path/to/your/model"
 instance = Instance(input="Hello", request_type="generate_until", args={"num_beams": 1, "max_length": 50})
-my_custom_lm = MyCustomLM(model_path, max_new_tokens=100, temperature=1.0, top_k=None, eot_token="\n\n", max_gen_toks=128)
+
+my_custom_lm = MyCustomLM(model_path, 
+	max_new_tokens=100, 
+ 	temperature=1.0, top_k=None, eot_token="\n\n", max_gen_toks=128)
 
 requests = [instance]
 generated_texts = my_custom_lm.generate_until(requests)

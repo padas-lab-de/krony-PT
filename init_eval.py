@@ -69,67 +69,109 @@ checkpoint = torch.load("out/GPT2.pt")
 model.load_state_dict(checkpoint)
 model.to(device)
 
-# TODO: this has to move to a proper file. 
-# Remove all the occurencess of hun from this file. bitte!
-
-num_samples = 5
-max_new_tokens = 100
-temperature = 0.8
-top_k = 200
-
-# change this hun
-start = "The founder of SpaceX and Tesla is " 
-print(f"Now we generate {num_samples} samples of the following prompt: {start}")
-
 enc = tiktoken.get_encoding("gpt2")
 encode = lambda s: enc.encode(s, allowed_special={"<|endoftext|>"})
 decode = lambda l: enc.decode(l)
 
+# the mf'ing model
 gen = CustomGeneration(model, encode, config_args)
 
-start_ids = encode(start)
-x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
+#start_ids = encode(start)
+#x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
+## this should be handled internally with Instances.
+#cfn = {"max_new_tokens" : 100, "temperature" : 0.8, "top_k" : 200}
+#x,y = get_batch("train")
+#logits, loss = model(x,y)
+#print(enc.eot_token)
 
 
-# this should be handled internally with Instances.
+from lm_eval.api.model import LM
+from lm_eval.api.instance import Instance
 
-cfn = {"max_new_tokens" : 100, "temperature" : 0.8, "top_k" : 200}
-likelihood_reqs = [
-   ("Who is Elon Musk", cfn),
-   ("Who owns Google? Good question, the answer is", cfn)
-] 
+gen_until = False
+if gen_until:
+    input_strings = [
+        "Explain the theory of relativity.",
+        "Describe the life cycle of a butterfly.",
+        "Outline the process of photosynthesis.",
+        "Discuss the history of the internet.",
+        "Elaborate on the advancements in AI technology."
+    ]
 
-# run generation
-if False: # this is self.generate_until 
-	with torch.no_grad():
-		with ctx:
-			for k in range(1):
-				y = gen.generate_until(likelihood_reqs)
-				for i in y:
-					print(decode(i[0].tolist()))
-			print('|---------------|')
+    generation_params = {
+        "max_new_tokens": 100,
+        "temperature": 0.8,
+        "top_k": 200,
+        "until": ["\n\n", "."],
+        "max_gen_toks": 128
+    }
+
+    until = [
+        Instance(
+            request_type="generate_until",
+            doc={"question": input_strings[i]},
+            arguments=(input_strings[i], generation_params),
+            idx=i
+        ) for i in range(5)
+    ]
+
+    # generate_until
+    with torch.no_grad():
+        with ctx:
+            o = gen.generate_until(until)
+            for i in o:
+                print(decode(i[0].tolist()))
+                print('\n|---------------|\n')
 
 
-# now we test loglikelihood
-with torch.no_grad():
-	with ctx:
-		for k in range(0):
-			y = gen.generate_until(likelihood_reqs)
-			for i in y:
-				print(decode(i[0].tolist()))
-		print('|---------------|')
+loglike = True
+if loglike:
+    input_target_pairs = [
+        ("The capital of France is", "Paris"),
+        ("Einstein is known for his theory of", "Relativity"),
+        ("The largest planet in the Solar System is", "Jupiter"),
+        ("The novel '1984' was written by", "George Orwell"),
+        ("The process of converting light energy into chemical energy in plants is called", "Photosynthesis")
+    ]
+
+    # Creating 5 loglikelihood instances with the specified input and target strings
+    loglikelihood_instances = [
+        Instance(
+            request_type="loglikelihood",
+            doc={},  # Empty doc as no additional context is needed
+            arguments=input_target_pairs[i],
+            idx=i + 10  # Indexes starting from 10 to avoid overlap with previous instances
+        ) for i in range(5)
+    ]
+
+roll = True 
+if roll:
+# Creating 5 instances for loglikelihood_rolling requests with specified parameters
+# Example input strings for loglikelihood_rolling
+    rolling_input_strings = [
+        "The theory of evolution was proposed by Charles Darwin.",
+        "Quantum mechanics is a fundamental theory in physics.",
+        "Shakespeare wrote many famous plays including Hamlet and Macbeth.",
+        "The Great Wall of China is one of the seven wonders of the world.",
+        "Artificial Intelligence has significant impacts on various industries."
+    ]
+
+    # Creating 5 loglikelihood_rolling instances with the specified input strings
+    loglikelihood_rolling_instances = [
+        Instance(
+            request_type="loglikelihood_rolling",
+            doc={},  # Empty doc as no additional context is needed
+            arguments=(rolling_input_strings[i],),
+            idx=i + 15  # Indexes starting from 15 to avoid overlap with previous instances
+        ) for i in range(5)
+    ]
 
 
-x,y = get_batch("train")
-logits, loss = model(x,y)
+    
 
-print(x,y)
-print(enc.eot_token)
 
-# TODO
-# install lm-eval
-# play with it. smth that only requires generate_until
-#
+
+
 
 """
 print(logits.shape)
@@ -144,10 +186,11 @@ print("The big fucking loss >>\n\n")
 print(F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=-1))
 
 n  = 30
+
 x1 = xx[:n,:]
 x2 = F.log_softmax(x1, dim = 1)
-y1 = yy[:n]
 
+y1 = yy[:n]
 
 print("the Mini loss is", F.cross_entropy(x1, y1, ignore_index=-1))
 print(x1, y1)
