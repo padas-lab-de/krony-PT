@@ -39,29 +39,27 @@ class CustomGeneration(LM):
 			max_new_tokens = generation_params.get("max_gen_toks", 128)
 			temperature = generation_params.get("temperature", 1.0)
 			top_k = generation_params.get("top_k", None)
-			
 			outputs.append(self.generate(input_ids, max_new_tokens, temperature, top_k))
 		return outputs
 
-
-
 	def loglikelihood(self, requests):
-		"""
- 		"""
 		log_probs = []
 		is_greedy = []
 		for request in requests:
-			#input_str, target_str = request.args[0], request.args[1]
-			input_str, target_str = request[0], request[1] # both supposed to be strings here
+			s0, s1 = request.args[0], request.args[1]
+			s1 = s0 + " " + s1
+			s0 = torch.tensor([self.tokenizer(s0)]).to(self.device)
+			s1 = torch.tensor([self.tokenizer(s1)]).to(self.device)
+			r = s1.shape[1] - s0.shape[1]
 
-			# just tokenizing both input and targer	
-			input_ids = torch.tensor([self.tokenizer(input_str)]).to(self.device)
-			target_ids = torch.tensor([self.tokenizer(target_str)]).to(self.device)
+			x0, x1 = s1[:,:-1], s1[:,1:]
 
-			logits, _ = self.model(input_ids, labels=target_ids[:, :-1]) # why ?
-			log_probs_t = torch.gather(logits, 2, target_ids[:, 1:].unsqueeze(2)).squeeze()
-			log_probs.append(-log_probs_t.sum().item())
-			is_greedy.append(torch.argmax(logits[:, -1, :], dim=-1).eq(target_ids[:, -1]).item())
+			lx, l = self.model(x0, x1)
+			t1, t2= lx[:,-r:,:], x1[:,-r:]
+
+			#log_probs_t = torch.gather(logits, 2, target_ids[:, 1:].unsqueeze(2)).squeeze()
+			#log_probs.append(-log_probs_t.sum().item())
+			#is_greedy.append(torch.argmax(logits[:, -1, :], dim=-1).eq(target_ids[:, -1]).item())
 
 		return [(lp, ig) for lp, ig in zip(log_probs, is_greedy)]
 
@@ -73,7 +71,6 @@ class CustomGeneration(LM):
 
 			input_ids = torch.tensor([self.tokenizer(input_str)]).to(self.device)
 
-			# this needs a quick fix, check the prepare.py file // DONE
 			eos_index = self.tokenizer.eot_token
 
 			logits, _ = self.model(input_ids)
@@ -84,15 +81,26 @@ class CustomGeneration(LM):
 
 """
 
+
+
+
+requests = []
+for request in requests:
+	input_str, target_str = request[0], request[1] # both supposed to be strings here
+	l  = input_str + " "+ target_str
+	l = torch.tensor([encode(l)]).to(device)
+	logits, _ = self.model(l) # why ?
+
+	log_probs_t = torch.gather(logits, 2, target_ids[:, 1:].unsqueeze(2)).squeeze()
+	log_probs.append(-log_probs_t.sum().item())
+	is_greedy.append(torch.argmax(logits[:, -1, :], dim=-1).eq(target_ids[:, -1]).item())
+
 Generate:
-
-input  >> 
-output >> 
-
+    input  >> 
+    output >> 
 
 from dataclasses import dataclass, field
 from typing import Literal, Tuple
-
 
 @dataclass
 class Instance:
@@ -137,8 +145,6 @@ instances = [
 
 instances
 
-
-
 Here, we define a MyCustomLM class 
 that takes your GPT2 model as input 
 and initializes it in evaluation mode. 
@@ -168,11 +174,8 @@ generated_texts = my_custom_lm.generate_until(requests)
 loglikelihoods = my_custom_lm.loglikelihood(requests)
 loglikelihoods = [ll[0] for ll
 
-
 Ok, so:
 
 * requests -->  List[Instance]  // basic : requests = [one_req], now, what is one_req
 * one_req, is one request, gotcha haha. 
-* 
-
 """

@@ -11,10 +11,12 @@ import torch.nn as nn
 from torch.nn import functional as F
 
 import tiktoken
+
 from model_origin import *
 from model import *
-from eval_wrapper import *
 
+
+from eval_wrapper import *
 
 if True:
     # put some vars here.
@@ -76,17 +78,12 @@ decode = lambda l: enc.decode(l)
 # the mf'ing model
 gen = CustomGeneration(model, encode, config_args)
 
-#start_ids = encode(start)
-#x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
-## this should be handled internally with Instances.
-#cfn = {"max_new_tokens" : 100, "temperature" : 0.8, "top_k" : 200}
-#x,y = get_batch("train")
-#logits, loss = model(x,y)
-#print(enc.eot_token)
 
 
-from lm_eval.api.model import LM
+#from lm_eval.api.model import LM
+import lm_eval
 from lm_eval.api.instance import Instance
+
 
 gen_until = False
 if gen_until:
@@ -126,7 +123,7 @@ if gen_until:
 
 loglike = True
 if loglike:
-    input_target_pairs = [
+    log_ins = [
         ("The capital of France is", "Paris"),
         ("Einstein is known for his theory of", "Relativity"),
         ("The largest planet in the Solar System is", "Jupiter"),
@@ -139,16 +136,15 @@ if loglike:
         Instance(
             request_type="loglikelihood",
             doc={},  # Empty doc as no additional context is needed
-            arguments=input_target_pairs[i],
+            arguments = log_ins[i],
             idx=i + 10  # Indexes starting from 10 to avoid overlap with previous instances
         ) for i in range(5)
     ]
 
-roll = True 
+roll = False 
+
 if roll:
-# Creating 5 instances for loglikelihood_rolling requests with specified parameters
-# Example input strings for loglikelihood_rolling
-    rolling_input_strings = [
+    roll_ins = [
         "The theory of evolution was proposed by Charles Darwin.",
         "Quantum mechanics is a fundamental theory in physics.",
         "Shakespeare wrote many famous plays including Hamlet and Macbeth.",
@@ -161,24 +157,57 @@ if roll:
         Instance(
             request_type="loglikelihood_rolling",
             doc={},  # Empty doc as no additional context is needed
-            arguments=(rolling_input_strings[i],),
+            arguments=(roll_ins[i],),
             idx=i + 15  # Indexes starting from 15 to avoid overlap with previous instances
         ) for i in range(5)
     ]
 
 
+
+from lm_eval import tasks, evaluator
+
+
+
+for (s0,s1) in log_ins:
+    s1 = s0 + " " + s1
+    s0, s1 = torch.tensor([encode(s0)]).to(device), torch.tensor([encode(s1)]).to(device)
+    r = s1.shape[1] - s0.shape[1]
+    x0, x1 = s1[:,:-1], s1[:,1:]
+    lx, l = model(x0, x1)
+    t1, t2= lx[:,-r:,:], x1[:,-r:]
+    
+    lxx = torch.gather(lx, 2, x1.unsqueeze(-1)).squeeze(-1)
+
+    #print("Input only", len(s0)) 
+    #print("Input + Output: ", len(s1)) 
+    #print("New output: ", len(s1)-len(s0)) 
+    
     
 
 
-
-
-
 """
-print(logits.shape)
-print(logits.view(-1, logits.size(-1)).shape)
-print(y.view(-1).shape)
-xx = logits.view(-1, logits.size(-1))
-yy = y.view(-1)
+Sum up:
+* x, y =  get_batch("train") 
+    * have the same shapa batch_size X block_size
+    * x[:,1:] == y[:,:-1] True. (every y = x + 1 token at the end.)
+
+* How is the loss computed?
+    * logits, _ = model(x,y) 
+    * logits has size [32, 1024, 50k] ==> for each token, we have 
+
+
+start_ids = encode(start)
+x = (torch.tensor(start_ids, dtype=torch.long, device=device)[None, ...])
+
+# this should be handled internally with Instances.
+
+cfn = {"max_new_tokens" : 100, "temperature" : 0.8, "top_k" : 200}
+x,y = get_batch("train")
+logits, loss = model(x,y)
+print(enc.eot_token)
+
+xx = logits.view(-1, logits.size(-1))  # [32*1024  x 50k]
+yy = y.view(-1)                        # [32*1024]
 
 print(f"the shapes {xx.shape}, {yy.shape}")
 
@@ -186,10 +215,8 @@ print("The big fucking loss >>\n\n")
 print(F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1), ignore_index=-1))
 
 n  = 30
-
 x1 = xx[:n,:]
 x2 = F.log_softmax(x1, dim = 1)
-
 y1 = yy[:n]
 
 print("the Mini loss is", F.cross_entropy(x1, y1, ignore_index=-1))
