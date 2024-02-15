@@ -174,15 +174,19 @@ for (s0,s1) in log_ins:
     r = s1.shape[1] - s0.shape[1]
     x0, x1 = s1[:,:-1], s1[:,1:]
     lx, l = model(x0, x1)
+
     t1, t2= lx[:,-r:,:], x1[:,-r:]
-    
-    lxx = torch.gather(lx, 2, x1.unsqueeze(-1)).squeeze(-1)
+
+    lxx = torch.gather(t1, 2, t2.unsqueeze(-1)).squeeze(-1)
+    print(lxx)
+    lxx = F.log_softmax(lxx).sum().item()
+    print(lxx)
 
     #print("Input only", len(s0)) 
     #print("Input + Output: ", len(s1)) 
     #print("New output: ", len(s1)-len(s0)) 
     
-    
+# Hard fucking question, do you gather then softmax or softmax then gather or wtf we doing dawg
 
 
 """
