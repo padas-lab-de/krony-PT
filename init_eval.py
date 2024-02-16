@@ -17,6 +17,7 @@ from model import *
 
 
 from eval_wrapper import *
+from eval2 import *
 
 if True:
     # put some vars here.
@@ -78,12 +79,14 @@ decode = lambda l: enc.decode(l)
 # the mf'ing model
 gen = CustomGeneration(model, encode, config_args)
 
+# has nth to do with the model? wtf?
+eval = EvalHarnessAdapter(encode, config_args["vocab_size"], config_args["block_size"])
 
 
-#from lm_eval.api.model import LM
-import lm_eval
+#import lm_eval
 from lm_eval.api.instance import Instance
-
+from lm_eval import tasks, evaluator, utils
+from lm_eval.api.model import LM
 
 gen_until = False
 if gen_until:
@@ -121,8 +124,7 @@ if gen_until:
                 print('\n|---------------|\n')
 
 
-loglike = True
-if loglike:
+if 0:
     log_ins = [
         ("The capital of France is", "Paris"),
         ("Einstein is known for his theory of", "Relativity"),
@@ -164,9 +166,86 @@ if roll:
 
 
 
+res = []
+log_ins = [
+    ("The capital of France is", "Paris"),
+    ("Einstein is known for his theory of", "Relativity"),
+    ("The largest planet in the Solar System is", "Jupiter"),
+    ("The novel '1984' was written by", "George Orwell"),
+    ("The process of converting light energy into chemical energy in plants is called", "Photosynthesis")
+]
+
+# Creating 5 loglikelihood instances with the specified input and target strings
+requests = [
+    Instance(
+        request_type="loglikelihood",
+        doc={},  # Empty doc as no additional context is needed
+        arguments = log_ins[i],
+        idx=i + 10  # Indexes starting from 10 to avoid overlap with previous instances
+    ) for i in range(5)
+]
+
+# Reorder the requests in the descending order of the lengths,
+# so that sequences with similar lengths are close
+def _collate(x):
+    toks = x[1] + x[2]
+    return -len(toks), tuple(toks)
+
+reord = utils.Reorderer(requests, _collate)
+
+"""
+# Loop through requests with `batch_size` number of requests at a time
+for chunk in utils.chunks(tqdm(reord.get_reordered(), disable=disable_tqdm), self.batch_size):
+    # To store the inputs for the batch
+    inps = []
+    # The continuations for the batch
+    continuations = []
+    # Lengths of the input sequences
+    inplens = []
+    # Padded length for the batch
+    padded_length = None
+    # Loop through each request in the chunk and collect them into PyTorch tensors with paddings
+    for _, context_enc, continuation_enc in chunk:
+        # Concatenate the context and continuation
+        inp = context_enc + continuation_enc
+        # Truncate from left if the size exceeds the `max_length`
+        inp = inp[-(self.max_length + 1):]
+        # Remove final token
+        inp = inp[:-1]
+        # Create a tensor
+        inp = torch.tensor(inp, dtype=torch.long)
+        # Input length
+        inplen = inp.shape[0]
+
+        # Determine the padded length.
+        # Shorter sequences will get padded.
+        if padded_length is None:
+            padded_length = int(math.ceil(inplen / 32)) * 32
+        # padded_length = padded_length if padded_length is not None else inplen
+
+        # Padding
+        padding = torch.zeros(padded_length - inplen, dtype=torch.long)
+
+        # Add padding
+        inp = torch.cat([inp, padding], dim=0)
+
+        inps.append(inp)
+        continuations.append(continuation_enc)
+        inplens.append(inplen)
+
+    # Get model logits
+    logits = self._model_call(torch.stack(inps))
+
+    # Get log softmaxes
+    multi_logits = F.slog_softmax(logits, dim=-1)
+
+
+
+
+
+
+
 from lm_eval import tasks, evaluator
-
-
 
 for (s0,s1) in log_ins:
     s1 = s0 + " " + s1
@@ -189,7 +268,7 @@ for (s0,s1) in log_ins:
 # Hard fucking question, do you gather then softmax or softmax then gather or wtf we doing dawg
 
 
-"""
+
 Sum up:
 * x, y =  get_batch("train") 
     * have the same shapa batch_size X block_size

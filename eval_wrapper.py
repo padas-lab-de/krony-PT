@@ -80,10 +80,6 @@ class CustomGeneration(LM):
 
 
 """
-
-
-
-
 requests = []
 for request in requests:
 	input_str, target_str = request[0], request[1] # both supposed to be strings here
