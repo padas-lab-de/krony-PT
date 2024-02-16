@@ -80,7 +80,7 @@ decode = lambda l: enc.decode(l)
 gen = CustomGeneration(model, encode, config_args)
 
 # has nth to do with the model? wtf?
-eval = EvalHarnessAdapter(encode, config_args["vocab_size"], config_args["block_size"])
+eval = EvalHarnessAdapter(model, enc, config_args["vocab_size"], config_args["block_size"])
 
 
 #import lm_eval
@@ -187,11 +187,6 @@ requests = [
 
 # Reorder the requests in the descending order of the lengths,
 # so that sequences with similar lengths are close
-def _collate(x):
-    toks = x[1] + x[2]
-    return -len(toks), tuple(toks)
-
-reord = utils.Reorderer(requests, _collate)
 
 """
 # Loop through requests with `batch_size` number of requests at a time

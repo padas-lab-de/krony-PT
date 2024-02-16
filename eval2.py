@@ -14,6 +14,7 @@ This is the code to test the model on
 """
 from contextlib import redirect_stdout
 import math
+from re import I
 from typing import List, Tuple
 
 import torch
@@ -38,7 +39,7 @@ class EvalHarnessAdapter(LM):
     This is based on the [adapter from EleutherAI/gpt-neox](https://github.com/EleutherAI/gpt-neox/blob/main/eval_tasks/eval_adapter.py)
     """
 
-    def __init__(self, tokenizer: Tokenizer, vocab_size: int, batch_size: int):
+    def __init__(self, model, tokenizer: Tokenizer, vocab_size: int, batch_size: int):
         """
         :param tokenizer: is the [Huggingface Tokenizer](huggingface/tokenizers)
         :param vocab_size: is the size of the vocabulary
@@ -47,14 +48,17 @@ class EvalHarnessAdapter(LM):
         :param batch_size: is the batch size
         """
         super().__init__()
+        self.model = model 
         self.tokenizer = tokenizer
+        self.encoder =  lambda s: self.tokenizer.encode(s, allowed_special={"<|endoftext|>"})
         self._eot_token_id = self.tokenizer.eot_token
         self._vocab_size = vocab_size
         self._batch_size = batch_size
 
     @property
     def device(self):
-        raise RuntimeError()
+        return "cuda"
+        
 
     @property
     def vocab_size(self):
@@ -64,7 +68,7 @@ class EvalHarnessAdapter(LM):
     @property
     def eot_token_id(self):
         """End-of-text token"""
-        return self._eot_token_id
+        return self.tokenizer.eot_token
 
     @property
     def max_length(self):
@@ -83,17 +87,12 @@ class EvalHarnessAdapter(LM):
         """
         return self._batch_size
 
-    def tok_encode(self, string: str):
-        """
-        Encode a given text
-        """
-        return self.tokenizer.encode(string).ids
+    
+    def tok_encode(self, string: str) -> List[int]:
+        return self.encoder(string)
 
-    #def tok_decode(self, tokens: List[int]):
-    #    """
-    #    Decode text from token ids
-    #    """
-    #    return self.tokenizer.decode(tokens)
+    def tok_decode(self, tokens: List[int]) -> str:
+        return self.tokenizer.decode(tokens)
 
     def _model_call(self, inps: torch.Tensor):
         raise NotImplementedError
@@ -104,16 +103,46 @@ class EvalHarnessAdapter(LM):
     def greedy_until(self, requests):
         raise RuntimeError()
     
-    def loglikelihood(self, requests) -> List[Tuple[float, bool]]:
-        return super().loglikelihood(requests)
-
     def generate_until(self, requests) -> List[str]:
         return super().generate_until(requests)
     
     def loglikelihood_rolling(self, requests) -> List[Tuple[float | bool]]:
         return super().loglikelihood_rolling(requests)
     
-    @torch.no_grad()
+    def _encode_pair(self, context: str, continuation: str) -> Tuple[List[int], List[int]]:
+        """
+            > just encoding here /  nothing much.
+            > input ("bla bla", "bla")
+            > output 
+        """
+        n_spaces = len(context) - len(context.rstrip())
+        if n_spaces > 0:
+            continuation = context[-n_spaces:] + continuation
+            context = context[:-n_spaces]
+            
+        whole_enc = self.tok_encode(context + continuation)
+        context_enc = self.tok_encode(context)
+        context_enc_len = len(context_enc)
+        continuation_enc = whole_enc[context_enc_len:]
+        return context_enc, continuation_enc
+    
+    def loglikelihood(self, requests) -> List[Tuple[float, bool]]:
+        new_reqs = []
+        for context, continuation in [req.args for req in requests]:
+            if context == "":
+                # end of text as context
+                context_enc, continuation_enc = (
+                    [self.eot_token_id],
+                    self.tok_encode(continuation),
+                )
+            else:
+                context_enc, continuation_enc = self._encode_pair(context, continuation)
+
+            new_reqs.append(((context, continuation), context_enc, continuation_enc))
+
+        return self._loglikelihood_tokens(new_reqs)
+
+
     def _loglikelihood_tokens(self, requests, disable_tqdm=False):
         """
         ### Get log-likelihoods of the next tokens
@@ -131,19 +160,19 @@ class EvalHarnessAdapter(LM):
             return -len(toks), tuple(toks)
 
         reord = utils.Reorderer(requests, _collate)
-
+    
+    
         # Loop through requests with `batch_size` number of requests at a time
         for chunk in utils.chunks(tqdm(reord.get_reordered(), disable=disable_tqdm), self.batch_size):
-            
+
             inps = []             # To store the inputs for the batch
             continuations = []    # The continuations for the batch
             inplens = []          # Lengths of the input sequences
             padded_length = None  # Padded length for the batch
-            
+
             # Loop through each request in the chunk and collect them into PyTorch tensors with paddings
-            
             for _, context_enc, continuation_enc in chunk:
-                # Concatenate
+                # Concatenate the context and continuation
                 inp = context_enc + continuation_enc
                 # Truncate from left if the size exceeds the `max_length`
                 inp = inp[-(self.max_length + 1):]
@@ -171,10 +200,45 @@ class EvalHarnessAdapter(LM):
                 inplens.append(inplen)
 
             # Get model logits
-            logits = self._model_call(torch.stack(inps))
+            x = torch.stack(inps)
+            logits = self.model(torch.stack(inps).to("cuda"))
+            print("in  ", x.shape)
+            print("out ", logits[0].shape)
 
             # Get log softmaxes
-            multi_logits = F.slog_softmax(logits, dim=-1)
+            multi_logits = F.log_softmax(logits[0], dim=-1)
 
-        return res 
-    
+            # Loop through the input/output pairs of the batch
+            for logits, inplen, cont_toks in zip(multi_logits, inplens, continuations):
+                # Get number of predicted tokens
+                contlen = len(cont_toks)
+                # Get logits of those
+                logits = logits[0, inplen - contlen: inplen]
+                # Get the tokens with the highest probabilities
+                greedy_tokens = logits.argmax(dim=-1)
+                # Get the target tokens
+                cont_toks = torch.tensor(cont_toks, dtype=torch.long).to(logits.device)
+                # Whether there's an exact match
+                max_equal = (greedy_tokens == cont_toks).all()
+                # Log-likelihoods of the target tokens
+                logits = torch.gather(logits, 1, cont_toks[:, None])
+                # Add the total log-likelihoods and whether there was a match to the results
+                res.append((float(logits.sum()), bool(max_equal)))
+
+        # Re-order and return results
+        return reord.get_original(res)
+
+
+    @torch.no_grad()
+    def run_eval(self, name: str, eval_tasks: List[str]):
+
+        # Run [EleutherAI/lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness) evaluator
+        results = evaluator.evaluate(lm=self, task_dict=tasks.get_task_dict(eval_tasks))
+
+        # Add configs
+        results["config"] = {
+            "name": name,
+        }
+
+        #
+        return results
