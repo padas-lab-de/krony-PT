@@ -161,7 +161,6 @@ class EvalHarnessAdapter(LM):
 
         reord = utils.Reorderer(requests, _collate)
 
-
         # Loop through requests with `batch_size` number of requests at a time
         for chunk in utils.chunks(tqdm(reord.get_reordered(), disable=disable_tqdm), self.batch_size):
             # chunk is a list, eeach element has 
@@ -222,9 +221,9 @@ class EvalHarnessAdapter(LM):
             # this is again, batch x 1 x 50k   (problem the target is more than one token, which is likely the case.)
             """
             In the old set-up:
-            > multi_logits >> batch x 1 x 50k
-            > inplens      >> list of (context+cont)  length [14, 9, 9, 9, 5]
-            > continuation >> klist of cont [[32, 43], [], [], ...]
+                > multi_logits >> batch x 1 x 50k
+                > inplens      >> list of (context+cont)  length [14, 9, 9, 9, 5]
+                > continuation >> klist of cont [[32, 43], [], [], ...]
             """  
 
             #return logits, reord, x, multi_logits, continuations, inplens
@@ -241,8 +240,8 @@ class EvalHarnessAdapter(LM):
                 cont_toks = torch.tensor(cont_toks, dtype=torch.long).to(logits.device)
 
                 max_equal = (greedy_tokens == cont_toks).all() # Whether there's an exact match
-                logits = torch.gather(logits, 1, cont_toks[:, None])
 
+                logits = torch.gather(logits, 1, cont_toks[:, None])
                 # Add the total log-likelihoods and whether there was a match to the results
                 res.append((float(logits.sum()), bool(max_equal)))
 
@@ -261,3 +260,39 @@ class EvalHarnessAdapter(LM):
         }
 
         return results
+    
+    
+class NoeXEvalHarnessAdapter(EvalHarnessAdapter):
+    """
+    ## Evaluation Harness Adapter
+
+    This is based on the [adapter from EleutherAI/gpt-neox](https://github.com/EleutherAI/gpt-neox/blob/main/eval_tasks/eval_adapter.py)
+    """
+
+    def __init__(self, model: nn.Module, tokenizer: Tokenizer, vocab_size: int, batch_size: int, device: torch.device):
+        """
+        :param model: is model
+        :param tokenizer: is the [Huggingface Tokenizer](huggingface/tokenizers)
+        :param vocab_size: is the size of the vocabulary
+         (this differs from the tokenizer vocab size since neox adds some extra to make the embedding layer
+         model parallel.)
+        :param batch_size: is the batch size
+        :param device: is the device of the model
+        """
+        super().__init__(model, tokenizer, vocab_size, batch_size)
+        self.model = model
+        self._device = device
+
+    #def _model_call(self, inps: torch.Tensor):
+    #    """
+    #    Call the model
+    #    """
+    #    return self.model(inps.to(self._device))
+
+
+def run_eval_harness(model: nn.Module, name: str, tokenizer, eval_tasks: List[str], device: torch.device, vocab_size: int, batch_size: int = 8):
+
+    eval_tasks = ["hellaswag"]
+    adapter = NoeXEvalHarnessAdapter(model, tokenizer, vocab_size, batch_size, device)
+
+    return adapter.run_eval(name, eval_tasks)

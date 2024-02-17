@@ -88,6 +88,8 @@ from lm_eval.api.instance import Instance
 from lm_eval import tasks, evaluator, utils
 from lm_eval.api.model import LM
 
+l = tasks.initialize_tasks()
+
 gen_until = False
 if gen_until:
     input_strings = [
