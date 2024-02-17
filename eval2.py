@@ -160,74 +160,94 @@ class EvalHarnessAdapter(LM):
             return -len(toks), tuple(toks)
 
         reord = utils.Reorderer(requests, _collate)
-    
-    
+
+
         # Loop through requests with `batch_size` number of requests at a time
         for chunk in utils.chunks(tqdm(reord.get_reordered(), disable=disable_tqdm), self.batch_size):
-
+            # chunk is a list, eeach element has 
             inps = []             # To store the inputs for the batch
+            tars = []
+
             continuations = []    # The continuations for the batch
             inplens = []          # Lengths of the input sequences
             padded_length = None  # Padded length for the batch
 
             # Loop through each request in the chunk and collect them into PyTorch tensors with paddings
             for _, context_enc, continuation_enc in chunk:
-                # Concatenate the context and continuation
-                inp = context_enc + continuation_enc
-                # Truncate from left if the size exceeds the `max_length`
+                inp = context_enc + continuation_enc # concat the encoding 
                 inp = inp[-(self.max_length + 1):]
-                # Remove final token
-                inp = inp[:-1]
+
+                # constructing inp/target
+                tar = inp[1:]
+                inp = inp[:-1] # Remove final token
+
                 # Create a tensor
                 inp = torch.tensor(inp, dtype=torch.long)
-                # Input length
-                inplen = inp.shape[0]
+                tar = torch.tensor(tar, dtype=torch.long)
 
-                # Determine the padded length.
-                # Shorter sequences will get padded.
+                inplen = inp.shape[0] # same for both in and out
+
                 if padded_length is None:
                     padded_length = int(math.ceil(inplen / 32)) * 32
-                # padded_length = padded_length if padded_length is not None else inplen
 
-                # Padding
+                # padded_length = padded_length if padded_length is not None else inplen
                 padding = torch.zeros(padded_length - inplen, dtype=torch.long)
 
                 # Add padding
                 inp = torch.cat([inp, padding], dim=0)
+                tar = torch.cat([tar, padding], dim=0)
 
                 inps.append(inp)
+                tars.append(tar)
+
                 continuations.append(continuation_enc)
                 inplens.append(inplen)
 
             # Get model logits
-            x = torch.stack(inps)
-            logits = self.model(torch.stack(inps).to("cuda"))
+            x = torch.stack(inps).to("cuda")   # 5 (batch size) x 32 (ctx+cont + padding)
+            y = torch.stack(tars).to("cuda")
+
+            logits, _ = self.model(x,y)
+            # batch x 1 x 50k
+
+            # I think this is the difference, we want likelihood of the whole cont, and  not only the last one
+            # assume logits is batch x ctx_length x 50k, and work with it.
+
             print("in  ", x.shape)
             print("out ", logits[0].shape)
 
             # Get log softmaxes
-            multi_logits = F.log_softmax(logits[0], dim=-1)
+            multi_logits = F.log_softmax(logits, dim=-1)
+
+            # this is again, batch x 1 x 50k   (problem the target is more than one token, which is likely the case.)
+            """
+            In the old set-up:
+            > multi_logits >> batch x 1 x 50k
+            > inplens      >> list of (context+cont)  length [14, 9, 9, 9, 5]
+            > continuation >> klist of cont [[32, 43], [], [], ...]
+            """  
+
+            #return logits, reord, x, multi_logits, continuations, inplens
 
             # Loop through the input/output pairs of the batch
             for logits, inplen, cont_toks in zip(multi_logits, inplens, continuations):
-                # Get number of predicted tokens
-                contlen = len(cont_toks)
-                # Get logits of those
-                logits = logits[0, inplen - contlen: inplen]
+                contlen = len(cont_toks)    # Get number of predicted tokens
+                logits = logits[inplen - contlen: inplen, :]   # Get logits of those
+
                 # Get the tokens with the highest probabilities
-                greedy_tokens = logits.argmax(dim=-1)
+                greedy_tokens = logits.argmax(dim=-1); print(greedy_tokens)
+
                 # Get the target tokens
                 cont_toks = torch.tensor(cont_toks, dtype=torch.long).to(logits.device)
-                # Whether there's an exact match
-                max_equal = (greedy_tokens == cont_toks).all()
-                # Log-likelihoods of the target tokens
+
+                max_equal = (greedy_tokens == cont_toks).all() # Whether there's an exact match
                 logits = torch.gather(logits, 1, cont_toks[:, None])
+
                 # Add the total log-likelihoods and whether there was a match to the results
                 res.append((float(logits.sum()), bool(max_equal)))
 
         # Re-order and return results
         return reord.get_original(res)
-
 
     @torch.no_grad()
     def run_eval(self, name: str, eval_tasks: List[str]):
@@ -240,5 +260,4 @@ class EvalHarnessAdapter(LM):
             "name": name,
         }
 
-        #
         return results
