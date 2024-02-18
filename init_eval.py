@@ -15,7 +15,6 @@ import tiktoken
 from model_origin import *
 from model import *
 
-
 from eval_wrapper import *
 from eval2 import *
 
@@ -62,8 +61,6 @@ if True:
             out[split] = losses.mean()
         model.train()
         return out
-
-
 
 print("Loading the model, hun!")
 conf = GPTConfig(**config_args)

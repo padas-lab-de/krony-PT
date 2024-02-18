@@ -261,11 +261,9 @@ class EvalHarnessAdapter(LM):
 
         return results
     
-    
 class NoeXEvalHarnessAdapter(EvalHarnessAdapter):
     """
     ## Evaluation Harness Adapter
-
     This is based on the [adapter from EleutherAI/gpt-neox](https://github.com/EleutherAI/gpt-neox/blob/main/eval_tasks/eval_adapter.py)
     """
 

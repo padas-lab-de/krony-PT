@@ -80,21 +80,6 @@ class CausalSelfAttention(nn.Module):
         y = self.resid_dropout(self.c_proj(y))
         return y
 
-class MLP(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
-        self.gelu    = nn.GELU()
-        self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
-        self.dropout = nn.Dropout(config.dropout)
-
-    def forward(self, x):
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
-        x = self.dropout(x)
-        return x
-    
 class KronyMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -102,10 +87,8 @@ class KronyMLP(nn.Module):
         self.factors = config.factors
         self.dim1 = config.dim_1
         self.dim2 = config.dim_2
-        # clean this mess ASAP, bitte, danke!
         
-        for f in range(config.factors): # each f is one factor 
-            #for i in range(1,3):  # W_1 x W_2
+        for f in range(config.factors):
             setattr(self, f"c_fc_{f}_0"  ,   nn.Parameter(torch.normal(0, 0.02, 
                                                                        size   = [self.dim1, self.dim2])))
             setattr(self, f"c_fc_{f}_1"  ,   nn.Parameter(torch.normal(0, 0.02,
@@ -272,9 +255,11 @@ class KronyGPT(nn.Module):
         }[model_type]
 
         print("forcing vocab_size=50257, block_size=1024, bias=True")
+
         config_args['vocab_size'] = 50257 # always 50257 for GPT model checkpoints
-        config_args['block_size'] = 1024 # always 1024 for GPT model checkpoints
-        config_args['bias'] = True # always True for GPT model checkpoints
+        config_args['block_size'] = 1024  # always 1024 for GPT model checkpoints
+        config_args['bias'] = True        # always True for GPT model checkpoints
+
         # we can override the dropout rate, if desired
         if 'dropout' in override_args:
             print(f"overriding dropout rate to {override_args['dropout']}")

@@ -17,8 +17,17 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 * **Idea:** Do the VL decompostion on the 3.17 VL checkpoint and not the original checkpoint. Because they have the same rank.  (Not really, they have the same rank, as the original matrix, 768)
 
-* Write report on new decompositions  and trad-off.
+* Write report on new decompositions  and trad-off. [In-Progress]
 
+* EVAL: work-around: Convert Kronecker checkpoint to a normal GPT / then evaluate it.
+	* [DONE] Conversion script. Convert a Kronecker LM to a normal GPT config
+	* [DONE] Check correctness of the code. > evaluate on a big batch
+	* Download GPT2 locall
+	* Eval from HF locally (using lm_eval)
+	* Plug in new checkpoints.
+	* Automate everything.
+
+	
 * EVAL --- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
 	* Make the interface (3 functions) work.
 	* Test the Instances.
