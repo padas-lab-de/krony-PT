@@ -34,40 +34,40 @@ for i in l:
     else:
         wow[i] = sd_krony[i].transpose(1,0)
 
-# kroneckers:
+# kroneckers:  @weight
 for i in l_weight:
     pref = i[:-7]
     f0 = i[:-7]+"_0_0"
     f1 = i[:-7]+"_0_1"
     m0 = sd_krony[f0]
     m1 = sd_krony[f1]
-    wow[i] = torch.kron(m0,m1)
+    wow[i] = torch.kron(m0,m1).transpose(1,0)
 
 # bias
-i
+so_far = wow.keys()
+bias = [i for i in keys_origin if i not in so_far]
 
+for b in bias:
+    s = sd_origin[b].shape
+    wow[b] = torch.zeros(s)
 
+model.load_state_dict(wow)
+device = "cuda:0"
+model.to(device)
 
-# common stuff:
-for i in  keys_origin:
-    if i in keys_krony:
-        print(i)
+lm_eval.tasks.initialize_tasks() 
+model_eval = lm_eval.models.huggingface.HFLM(pretrained=model)
+result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], device=device, batch_size=8)
 
-b2 = []
+print(result["results"])
 
-# goodbye bias:
+"""
+from transformers import GPT2LMHeadModel
+import lm_eval
+import torch
 
-
-
-# check karpathy thing on convs.. 
-
-
-
-
-#model.load_state_dict(wow)
-
-#lm_eval.tasks.initialize_tasks() 
-#model_eval = lm_eval.models.huggingface.HFLM(pretrained=model)
-#result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], batch_size=8)
-
-#print(result["results"])
+model       = GPT2LMHeadModel.from_pretrained("gpt2")
+lm_eval.tasks.initialize_tasks() 
+model_eval = lm_eval.models.huggingface.HFLM(pretrained=model)
+result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], batch_size=8)
+"""
