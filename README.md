@@ -11,6 +11,21 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ---
 ### **TODO:** <a name="todo">
 
+
+* Go through all HF steps (torch to HF), and apply it to the newly found repo:
+	1. Make an inference script.
+
+* Fix the tokenizer issue in huggin.py / maybe that's the issue. [DONE] Nope, not the issue.
+
+
+* EVAL: work-around: Convert Kronecker checkpoint to a normal GPT / then evaluate it.
+	* [DONE] Conversion script. Convert a Kronecker LM to a normal GPT config
+	* [DONE] Check correctness of the code. > evaluate on a big batch
+	* [DONE] Download GPT2 locally
+	* [DONE] Eval from HF locally (using lm_eval)
+	* [DONE] Plug in new checkpoints.
+	* Automate everything. /TODO
+
 * Since now we have a 67M model (with the lower decompostions). We can add more factors and keep the #of parameters less than 87M. 
 
 * Training-idea: start from a 3.3 checkpoint (67M model), and retrain using a really high rate, and as much batch size as possible. 
@@ -19,13 +34,6 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 * Write report on new decompositions  and trad-off. [In-Progress]
 
-* EVAL: work-around: Convert Kronecker checkpoint to a normal GPT / then evaluate it.
-	* [DONE] Conversion script. Convert a Kronecker LM to a normal GPT config
-	* [DONE] Check correctness of the code. > evaluate on a big batch
-	* Download GPT2 locall
-	* Eval from HF locally (using lm_eval)
-	* Plug in new checkpoints.
-	* Automate everything.
 
 	
 * EVAL --- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)

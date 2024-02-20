@@ -2,7 +2,6 @@ from transformers import GPT2LMHeadModel
 import lm_eval
 import torch
 
-
 model       = GPT2LMHeadModel.from_pretrained("gpt2")
 sd_origin   = model.state_dict()
 keys_origin = sd_origin.keys()
@@ -23,7 +22,7 @@ l1       = [i for i in keys_origin if i not in keys_krony ]
 l_weight =  [i for i in l1 if i.endswith(".weight")]
 l_bias   =  [i for i in l1 if i.endswith(".bias")]
 
-# TODO: check if l_bias + l_weight  = l1
+# TODO: check if l_bias + l_weight  = l1, DONE, passed!
 
 l2 = [i for i in keys_krony  if i not in keys_origin]
 
@@ -52,14 +51,25 @@ for b in bias:
     wow[b] = torch.zeros(s)
 
 model.load_state_dict(wow)
+
 device = "cuda:0"
 model.to(device)
-
 lm_eval.tasks.initialize_tasks() 
-model_eval = lm_eval.models.huggingface.HFLM(pretrained=model)
-result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], device=device, batch_size=8)
 
-print(result["results"])
+from transformers import GPT2Tokenizer
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+
+model_eval = lm_eval.models.huggingface.HFLM(pretrained=model, tokenizer = tokenizer)
+result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], device=device, batch_size=8)
+#print(result["results"])
+
+# TODO
+
+# > Train with bias included.
+# > Train again on 2 factors with / small models.
+# > Try reshaping ? what did you mean here?
+
+
 
 """
 from transformers import GPT2LMHeadModel
