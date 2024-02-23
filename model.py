@@ -98,6 +98,9 @@ class KronyMLP(nn.Module):
             setattr(self, f"c_proj_{f}_1",   nn.Parameter(torch.normal(0, 0.02,
                                                                         size   = [768//self.dim2, 3072//self.dim1])))
 
+        self.c_fc_bias = nn.Parameter(torch.zeros(3072))
+        self.c_proj_bias  = nn.Parameter(torch.zeros(768))
+
         self.gelu    = nn.GELU()
         self.dropout = nn.Dropout(config.dropout)
 
@@ -106,13 +109,13 @@ class KronyMLP(nn.Module):
             torch.kron(getattr(self, f"c_fc_{f}_0"), getattr(self, f"c_fc_{f}_1"))
             for f in range(self.factors)
         ]
-        x = x @ torch.stack(s_cfc).sum(dim=0).T
+        x = x @ torch.stack(s_cfc).sum(dim=0).T + self.c_fc_bias
         x = self.gelu(x)
         s_cproj =  [
             torch.kron(getattr(self, f"c_proj_{f}_0"), getattr(self, f"c_proj_{f}_1"))
             for f in range(self.factors)
         ]
-        x = x @ torch.stack(s_cproj).sum(dim=0).T
+        x = x @ torch.stack(s_cproj).sum(dim=0).T  + self.c_proj_bias
         x = self.dropout(x)
         return x
 

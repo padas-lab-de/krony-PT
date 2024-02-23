@@ -28,8 +28,7 @@ batch_size = 12
 block_size = config_args["block_size"]
 device = "cuda"
 device_type = "cuda"
-eval_iters = 200 # used in estimate_loss()
-
+eval_iters = 200 
 
 # data loader. and #estimate
 if True:
@@ -59,16 +58,14 @@ if True:
 		model.train()
 		return out
 
-# Case 1: Normy GPT
-print("GPT loading")
-GPT_state_dict = torch.load("out/GPT2.pt")
+print("Loading GPT")
+gpt2 = torch.load("out/GPT2.pt")
 conf = GPTConfig(**config_args)
 GPT0 = GPT(conf)
-
-#GPT0.load_state_dict(GPT_state_dict)
-#GPT0.to(device)
-#print(f"Computing the loss over {eval_iters} batches of 12")
-#print(f"Loss for NormyGPT is {estimate_loss(GPT0)}")
+GPT0.load_state_dict(gpt2)
+GPT0.to(device)
+print(f"Computing the loss over {eval_iters} batches of 12")
+print(f"Loss for NormyGPT is {estimate_loss(GPT0)}")
 
 # Case 2:  Kronecker GPT 
 print("KronyGPT 1st Loading")
@@ -84,19 +81,23 @@ config_args["dim_2"] = 384
 
 krony_conf = KronyGPTConfig(**config_args)
 KronyGPT0 = KronyGPT(krony_conf)
-#KronyGPT0.load_state_dict(krony_state_dict)
-#print("Loading to GPU")
-#KronyGPT0.to(device)
+KronyGPT0.load_state_dict(krony_state_dict)
+print("Loading to GPU")
+KronyGPT0.to(device)
 
-#print(f"Computing the loss over {eval_iters} batches of 12")
-#print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT0)}")
+print(f"Computing the loss over {eval_iters} batches of 12")
+print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT0)}")
 
-k_origin = GPT_state_dict.keys()
+
+k_origin = gpt2.keys()
 k_krony  = krony_state_dict.keys()
 
 l1 = [i for i in k_origin if i not in k_krony ]
 l2 = [i for i in k_krony  if i not in k_origin]
 l = [i for i in k_origin if i not in k_krony and i.endswith(".weight")]
+
+
+"""
 
 
 # the kroneckers
@@ -123,7 +124,6 @@ GPT0.to(device)
 print(f">>> Computing the loss over {eval_iters} batches of 12")
 print(f">>> Loss for NormyGPT is {estimate_loss(GPT0)}")
 
-"""
 def divs(number):
 	return np.arange(1, number + 1)[number % np.arange(1, number + 1) == 0]
 

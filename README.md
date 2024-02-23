@@ -12,6 +12,14 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ### **TODO:** <a name="todo">
 
 
+* Fix training:
+	* Add bias.
+	* Decompose new weights.
+	* Load them and check correctness of checkpoints.
+	* Add 2 methods to KronyPT load_from_gpt and save_to_gpt
+
+
+
 * Go through all HF steps (torch to HF), and apply it to the newly found repo:
 	1. Make an inference script.
 
@@ -34,6 +42,9 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 * Write report on new decompositions  and trad-off. [In-Progress]
 
+* Multiple kroneckers:
+	* Run test.
+	* Check correctness.
 
 	
 * EVAL --- GPT2 eval with [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harness)
