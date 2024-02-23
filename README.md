@@ -12,11 +12,11 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ### **TODO:** <a name="todo">
 
 
-* Fix training:
-	* Add bias.
-	* Decompose new weights.
-	* Load them and check correctness of checkpoints.
-	* Add 2 methods to KronyPT load_from_gpt and save_to_gpt
+* Fix training / debugging:
+	* Add bias. DONE
+	* Decompose new weights. DONE
+	* Load them and check correctness of checkpoints.  DONE
+	* Add 2 methods to KronyPT load_from_gpt and save_to_gpt  TODO	 
 
 
 
