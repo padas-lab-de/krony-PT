@@ -236,7 +236,7 @@ if master_process:
     print(f"tokens per iteration will be: {tpi:,}")
     print(f"Train data size {len(train_data):_}")
     print(f"To see all data we need {len(train_data)/tpi:_} iterations")
-    print(f"In {cut_the_run} iters. we are going to see {cut_the_run*tpi/len(train_data):.3f} % of the data")
+    print(f"In {cut_the_run} iters. we are going to see {cut_the_run*tpi*100/len(train_data):.3f} % of the data")
     print("\n >>>> Some data stats >>>> \n")
 
     print(">>>>> Training is starting now, here is some stats:")
@@ -322,11 +322,12 @@ while iter_num < cut_the_run:
 	scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
 	scaler.update()
 	optimizer.zero_grad(set_to_none=True)
+     
+#print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
 
-
-	if iter_num > 1 and iter_num % 900 == 0 and master_process:
+	if iter_num > 1 and iter_num % 9000 == 0 and master_process:
 		print(f"Saving the checkpoint at iteration {iter_num}!")
-		torch.save(model.state_dict(), f"checkpoints/{wandb_run_name}_iteration_{iter_num}.pt")
+		torch.save(model.state_dict(), f"checkpt2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	iter_num += 1
 	local_iter_num += 1
@@ -335,6 +336,7 @@ while iter_num < cut_the_run:
 		break
 
 if master_process:
+    torch.save(model.state_dict(), f"checkpt2/{wandb_run_name}_iteration_{iter_num}.pt")
     print("\n >>>> Some data stats >>>> \n")
     print(f"ddp_world_size {ddp_world_size}")
     print(f"gradient blabla {gradient_accumulation_steps}")

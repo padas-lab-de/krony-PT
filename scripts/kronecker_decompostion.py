@@ -13,7 +13,7 @@ change the **conf** dict to your liking.
 
 import torch
 from einops import rearrange
-from typing import Tuple
+from model import *
 
 # add original link to the implementation. > I'm following her on Twitter, Hailey smth.
 def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
@@ -54,12 +54,9 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
 
 device = torch.device("cuda")
 
-# loadign ckpt
-print("1. Loading GPT2 3.11 loss")
 
-sd = torch.load('out/GPT2.pt', map_location=device)
-nms_origin = list(sd.keys())
-nn = list(sd.keys())
+gpt= torch.load('out/GPT2.pt', map_location=device)
+k_origin= list(gpt.keys())
 
 def kron_it(checkpoint, config: dict):
 	print(f"This will return two factors of dims {config['dim']} \
@@ -87,17 +84,16 @@ def kron_it(checkpoint, config: dict):
 			k = fac
 			)
 
-		# cleaning the original checkpoint.
-		if c_fc_key in nms_origin:
-			nms_origin.remove(c_fc_key)
-			nms_origin.remove(c_proj_key)
-
 		for f in range(fac):
 			for k in range(2):
 				fc = f"transformer.h.{i}.mlp.c_fc_{f}_{k}"
 				proj = f"transformer.h.{i}.mlp.c_proj_{f}_{k}" 
 				new[fc]   = cfc_h[k][f]
 				new[proj] =  cproj_h[k][f] 
+
+		new[f"{c_fc_key[:-7]}_bias"]   = gpt[f"{c_fc_key[:-7]}.bias"]
+		new[f"{c_proj_key[:-7]}_bias"] = gpt[f"{c_proj_key[:-7]}.bias"]
+		
 	return new
 
 # change here 
@@ -105,27 +101,39 @@ conf = {"dim"   : (64, 24),  # the dims of A (m_1, n_1) following latex notation
 		 "n_factors" : 1
 }
 
+# Setting up a quick KronyGPT
+config_args = dict(
+	n_layer=12, 
+	n_head=12, 
+	n_embd=768,
+	vocab_size = 50257,
+	block_size = 1024,
+	bias = True,
+	dim_1 = 64,
+	dim_2 = 24 
+)
+
+krony_conf = KronyGPTConfig(**config_args)
+kronyG = KronyGPT(krony_conf)
+krony_sd   = kronyG.state_dict()
+k_krony    = krony_sd.keys()  # krony keys // 173
+
 print("2. Decomposing")
-sd_VL = kron_it(sd, conf)
-nms = list(sd_VL.keys())
-for w in nms_origin:
-	if w not in nms:
-		sd_VL[w] = sd[w]
+new = kron_it(gpt, conf)
 
-print(len(sd_VL.keys()))
-print(len(sd.keys()))
+pt_1 = list(new.keys())
+pt_2 = [i for i in k_krony if i not in pt_1]
 
-# delete this bias, not sure when this error appeared. 
-b =  [i for i in sd.keys() if any([i.endswith("mlp.c_proj.bias"), i.endswith("mlp.c_fc.bias")])]
-for i in b:
-	sd_VL.pop(i)
-
-print(len(sd_VL.keys()))
-
+for i in pt_2:
+    new[i] = gpt[i]
+  
+kronyG.load_state_dict(new) 
+ 
 print("3. Saving!")
-torch.save(sd_VL, "out/sd_VL_3072.pt")
-
+#torch.save(new, "out2/VL_64_24.pt")
+		
 """
+
 nms = list(sd.keys())
 one_block = nms[2:14]
 
