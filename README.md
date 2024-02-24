@@ -11,6 +11,10 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ---
 ### **TODO:** <a name="todo">
 
+* Work on the 128 x 32 schema:
+	* Recover the good checkpoint from 128 x 32 decomposition.
+	* Add bias (zeros and gpt2).
+	* Run with as much batch size as you can.
 
 * Fix training / debugging:
 	* Add bias. DONE
@@ -36,7 +40,6 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 * Since now we have a 67M model (with the lower decompostions). We can add more factors and keep the #of parameters less than 87M. 
 
-* Training-idea: start from a 3.3 checkpoint (67M model), and retrain using a really high rate, and as much batch size as possible. 
 
 * **Idea:** Do the VL decompostion on the 3.17 VL checkpoint and not the original checkpoint. Because they have the same rank.  (Not really, they have the same rank, as the original matrix, 768)
 

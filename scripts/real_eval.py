@@ -62,39 +62,45 @@ print("Loading GPT")
 gpt2 = torch.load("out/GPT2.pt")
 conf = GPTConfig(**config_args)
 
-#GPT0 = GPT(conf)
-#GPT0.load_state_dict(gpt2)
-#GPT0.to(device)
+GPT0 = GPT(conf)
+GPT0.load_state_dict(gpt2)
+GPT0.to(device)
+
 #print(f"Computing the loss over {eval_iters} batches of 12")
 #print(f"Loss for NormyGPT is {estimate_loss(GPT0)}")
-#
-# Case 2:  Kronecker GPT 
-#print("KronyGPT 1st Loading")
-#krony_state_dict = torch.load("checkpoints/gpt2-prune-lr-same-all-batch-12.pt")
-#
-## small cleaning. ddp leftovers.
-#for pn,p in list(krony_state_dict.items()):
-#	if pn.startswith("module"):
-#		krony_state_dict[pn[7:]] = krony_state_dict.pop(pn)
-#config_args["dim_1"] = 3072
-#config_args["dim_2"] = 384
 
-krony_conf = KronyGPTConfig(**config_args)
-KronyGPT = KronyGPT(krony_conf)
+print("Kroneckers turn:")
+config_args["dim_1"] = 128
+config_args["dim_2"] = 32
 
-krony_sd = KronyGPT.state_dict()
+krony128_1 = torch.load(f"out/128_32_gpt2_bias.pt")
+krony128_2 = torch.load(f"out/128_32_zeros_bias.pt")
 
-# keys of both of them.
+if False:
+    print("later")
+	#krony_conf = KronyGPTConfig(**config_args)
+	#krony1 = KronyGPT(krony_conf)
+	#krony2 = KronyGPT(krony_conf)
+	#krony1.load_state_dict(krony128_1)
+	#krony2.load_state_dict(krony128_2)
+	#krony1.to(device)
+	#krony2.to(device)
+	#print(f"Computing the loss over {eval_iters} batches of 12")
+	#print(f"Loss for krony with zeros bias >>  {estimate_loss(krony1)}")
+	#print(f"Loss for krony with gpt2 bias  >>  {estimate_loss(krony2)}")
+
+
 k_origin = gpt2.keys()
-k_krony  = krony_sd.keys()
+k_krony  = krony128_1.keys()
 
 ## Preprocessing.
 l  = [i for i in k_origin if i in k_krony]   #common params
+rest =  [i for i in k_origin if i not in k_krony]
 
-l1 = [i for i in k_origin if i not in k_krony] 
-l1_bias = [i for i in l1 if i.endswith("bias")]
-l1_rest = [i for i in l1 if not i.endswith("bias")]
+rest_bias = [i for i in rest if i.endswith("bias")]
+rest_rest = [i for i in rest if not i.endswith("bias")]
 
+"""
 l2 = [i for i in k_krony if i not in k_origin]
 l2_bias = [i for i in l2 if i.endswith("bias")]
 l2_rest = [i for i in l2 if not i.endswith("bias")]
@@ -106,7 +112,6 @@ for i in l:
     wow[i] = krony_sd[i]
 
 # bias
-"""
 for i in l1:
     pref = i[:-7]
     f0 = i[:-7]+"_0_0"
@@ -121,11 +126,6 @@ KronyGPT0.to(device)
 
 print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for KronyGPT with VL init is {estimate_loss(KronyGPT0)}")
-
-
-
-
-
 
 # the kroneckers
 
@@ -185,8 +185,6 @@ print(f"Saving some stuff")
 #assert len(krony_state_dict1.keys()) == len(krony_state_dict.keys())
 #assert len(krony_state_dict2.keys()) == len(krony_state_dict.keys())
 
-config_args["dim1"] = 128 
-config_args["dim2"] = 32 
 krony_conf1 = KronyGPTConfig(**config_args)
 KronyGPT1 = KronyGPT(krony_conf1)
 KronyGPT1.load_state_dict(krony_state_dict1)

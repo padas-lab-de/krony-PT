@@ -100,7 +100,7 @@ if ddp:
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
-    seed_offset = 0
+    seed_offset = 435
     ddp_world_size = 1
 
 
