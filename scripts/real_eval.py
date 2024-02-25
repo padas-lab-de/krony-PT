@@ -61,44 +61,70 @@ if True:
 print("Loading GPT")
 gpt2 = torch.load("out/GPT2.pt")
 conf = GPTConfig(**config_args)
-
 GPT0 = GPT(conf)
 GPT0.load_state_dict(gpt2)
 GPT0.to(device)
 
-#print(f"Computing the loss over {eval_iters} batches of 12")
-#print(f"Loss for NormyGPT is {estimate_loss(GPT0)}")
+print(f"Computing the loss over {eval_iters} batches of 12")
+print(f"Loss for NormyGPT is {estimate_loss(GPT0)}")
 
 print("Kroneckers turn:")
-config_args["dim_1"] = 128
-config_args["dim_2"] = 32
+config_args["dim_1"] = 3072
+config_args["dim_2"] = 384
 
-krony128_1 = torch.load(f"out/128_32_gpt2_bias.pt")
-krony128_2 = torch.load(f"out/128_32_zeros_bias.pt")
+it = 27900
+krony1 = torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_{it}.pt")
+krony2 = torch.load(f"checkpoints/gpt2-prune-new_init_0_001_iteration_{it}.pt")
 
-if False:
-    print("later")
-	#krony_conf = KronyGPTConfig(**config_args)
-	#krony1 = KronyGPT(krony_conf)
-	#krony2 = KronyGPT(krony_conf)
-	#krony1.load_state_dict(krony128_1)
-	#krony2.load_state_dict(krony128_2)
-	#krony1.to(device)
-	#krony2.to(device)
-	#print(f"Computing the loss over {eval_iters} batches of 12")
-	#print(f"Loss for krony with zeros bias >>  {estimate_loss(krony1)}")
-	#print(f"Loss for krony with gpt2 bias  >>  {estimate_loss(krony2)}")
+for pn,p in list(krony1.items()):
+	if pn.startswith("module"):
+		krony1[pn[7:]] = krony1.pop(pn)
 
+for pn,p in list(krony2.items()):
+	if pn.startswith("module"):
+		krony2[pn[7:]] = krony2.pop(pn)
 
 k_origin = gpt2.keys()
-k_krony  = krony128_1.keys()
+k_krony1  = krony1.keys()
 
-## Preprocessing.
-l  = [i for i in k_origin if i in k_krony]   #common params
-rest =  [i for i in k_origin if i not in k_krony]
-
+l  = [i for i in k_origin if i in k_krony1]   #common params
+rest =  [i for i in k_origin if i not in k_krony1]
 rest_bias = [i for i in rest if i.endswith("bias")]
 rest_rest = [i for i in rest if not i.endswith("bias")]
+
+
+
+#krony128_1 = torch.load(f"out/128_32_gpt2_bias.pt")
+#krony128_2 = torch.load(f"out/128_32_zeros_bias.pt")
+
+print("later")
+krony_conf = KronyGPTConfig(**config_args)
+krony = KronyGPT(krony_conf)
+krony_sd = krony.state_dict()
+k_krony = krony_sd.keys() 
+
+
+l  = [i for i in k_krony if i in k_krony1]   #common params
+rest =  [i for i in k_krony if i not in k_krony1]
+rest_bias = [i for i in rest if i.endswith("bias")]
+rest_rest = [i for i in rest if not i.endswith("bias")]
+
+# filling the bias:
+for i in rest_bias:
+    s = krony_sd[i].shape
+    krony1[i] = torch.zeros(s) 
+    krony2[i] = torch.zeros(s) 
+
+krony.load_state_dict(krony1)
+krony.to(device)
+print(f"Computing the loss over {eval_iters} batches of 12")
+print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
+
+krony.load_state_dict(krony2)
+krony.to(device)
+print(f"Computing the loss over {eval_iters} batches of 12")
+print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
+
 
 """
 l2 = [i for i in k_krony if i not in k_origin]

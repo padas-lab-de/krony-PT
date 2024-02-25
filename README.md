@@ -11,10 +11,16 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ---
 ### **TODO:** <a name="todo">
 
+* debugg 101:
+	* run the forward fucking pass. i am sick of you
+	* run the same batch through HF-GPT and KronyGPT ? 
+	* please do not give the same output.
+	* look-up table to switch between naming. GPT / Krony / GPT-HF
+
 * Work on the 128 x 32 schema:
-	* Recover the good checkpoint from 128 x 32 decomposition.
-	* Add bias (zeros and gpt2).
-	* Run with as much batch size as you can.
+	* Recover the good checkpoint from 128 x 32 decomposition. DONE
+	* Add bias (zeros and gpt2). DONE
+	* Run with as much batch size as you can.   DONE
 
 * Fix training / debugging:
 	* Add bias. DONE
@@ -22,13 +28,7 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 	* Load them and check correctness of checkpoints.  DONE
 	* Add 2 methods to KronyPT load_from_gpt and save_to_gpt  TODO	 
 
-
-
-* Go through all HF steps (torch to HF), and apply it to the newly found repo:
-	1. Make an inference script.
-
 * Fix the tokenizer issue in huggin.py / maybe that's the issue. [DONE] Nope, not the issue.
-
 
 * EVAL: work-around: Convert Kronecker checkpoint to a normal GPT / then evaluate it.
 	* [DONE] Conversion script. Convert a Kronecker LM to a normal GPT config
