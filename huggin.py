@@ -13,19 +13,6 @@ import torch
 #model1 = GPT2LMHeadModel(config)
 
 if True:
-    config0 = dict(
-        n_layer=12, 
-        n_head=12, 
-        n_embd=768,
-        vocab_size = 50257,
-        block_size = 1024,
-        bias = True,
-    )
-
-    conf = GPTConfig(**config0)
-    gpt0 = GPT(conf)
-    gpt0.from_pretrained("gpt2")
-
     config_args = dict(
         n_layer=12, 
         n_head=12, 
@@ -69,88 +56,129 @@ if True:
         model.train()
         return out
 
-model  = GPT2LMHeadModel.from_pretrained("./ggg")
-sd_origin   = model.state_dict()
-keys_origin = sd_origin.keys()
 
-it = 27900
-sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_{it}.pt")
+sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_27900.pt")
 for pn,p in list(sd_krony.items()):
 	if pn.startswith("module"):
 		sd_krony[pn[7:]] = sd_krony.pop(pn)
-keys_krony  = sd_krony.keys()
+
+k_krony = sd_krony.keys()
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
 
-#krony_sd = krony.state_dict()
-#k_krony = krony_sd.keys() 
-#print(f"# keys origin: {len(keys_origin)}  Krony:  {len(keys_krony)}")
+# Loading the GPTs:
+if True:
+    config0 = dict(
+        n_layer=12, 
+        n_head=12, 
+        n_embd=768,
+        vocab_size = 50257,
+        block_size = 1024,
+        bias = True,
+    )
 
-wow = {}
+    conf = GPTConfig(**config0)
+    gpt1 = GPT(conf)
+    sd1 = torch.load("out/GPT2.pt")
+    gpt1.load_state_dict(sd1)
 
 
+sd1 = gpt1.state_dict()
+k1 = sd1.keys() 
 
-l =  [i for i in keys_origin if i in keys_krony] # common.
-l1       = [i for i in keys_origin if i not in keys_krony ]
-l_weight =  [i for i in l1 if i.endswith(".weight")]
-l_bias   =  [i for i in l1 if i.endswith(".bias")]
+# HF model:
+model  = GPT2LMHeadModel.from_pretrained("gpt2")
+sd     = model.state_dict()
+k      = sd.keys()
 
-# TODO: check if l_bias + l_weight  = l1, DONE, passed!
+# from normal GPT to HF:
+assert set(k1) == set(k), "Andrej implementation doesn't matche HF-GPT2"
+miss = [i for i in k if not torch.equal(sd[i], sd1[i])]
 
-l2 = [i for i in keys_krony  if i not in keys_origin]
+transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
+
+match_test = []
+for i in k:
+    if any(i.endswith(gg) for gg in transposed):
+        x = torch.equal(sd[i].t(), sd1[i])
+    else:
+        x = torch.equal(sd[i], sd1[i])
+    match_test.append(x)
+    
+
+# step 1: From Krony GPT sd    TO    Anrej GPT sd 
+sd_krony = krony.state_dict()
+sd_k = sd_krony.keys()
+
+l_common = [i for i in k1 if i in sd_k] #common
+
+l  = [i for i in k1 if i not in sd_k]
+l_weight = [i for i in l if i.endswith(".weight")]
+l_bias   = [i for i in l if not i.endswith(".weight")]
+
+def kron_to_gpt(state_d):
+    wow = {}
+    for i in l_common:
+        wow[i] = state_d[i]
+
+    # bias:
+    for i in l_bias:
+        s = sd1[i].shape
+        wow[i] = torch.zeros(s)
+    # kroneckers
+    for i in l_weight:
+        f0 = i[:-7]+"_0_0"
+        f1 = i[:-7]+"_0_1"
+        m0 = state_d[f0]
+        m1 = state_d[f1]
+        wow[i] = torch.kron(m0,m1)
+    return wow
+
+wow = kron_to_gpt(sd_krony)
+
+# step 2: From  Anrej GPT sd   TO    HF GPT
+
+def hf_gpt_sd(sdd):
+    wow1 = {}
+
+    k1 = [i for i in k if any(i.endswith(hh) for hh in transposed)] 
+    k2 = [i for i in k if  not any(i.endswith(hh) for hh in transposed)] 
+
+    for i in k1:
+        wow1[i] = sdd[i].t()
+    for i in k2:
+        wow1[i] = sdd[i]
+
+    return wow1
+    
+sd_f = hf_gpt_sd(sd1)    
+model.load_state_dict(sd_f)
+model.save_pretrained('./tt1')
+
+
 
 """
-# common keys
-for i in l:
-    if sd_krony[i].shape == sd_origin[i].shape:
-        wow[i] = sd_krony[i]
-    else:
-        wow[i] = sd_krony[i].transpose(1,0)
-
-# kroneckers:  @weight
-for i in l_weight:
-    pref = i[:-7]
-    f0 = i[:-7]+"_0_0"
-    f1 = i[:-7]+"_0_1"
-    m0 = sd_krony[f0]
-    m1 = sd_krony[f1]
-    wow[i] = torch.kron(m0,m1).transpose(1,0)
-
-# bias
-so_far = wow.keys()
-bias = [i for i in keys_origin if i not in so_far]
-
-for b in bias:
-    s = sd_origin[b].shape
-    wow[b] = torch.zeros(s)
-
-model.load_state_dict(wow)
-
-device = "cuda:0"
-model.to(device)
-lm_eval.tasks.initialize_tasks() 
-
-from transformers import GPT2Tokenizer
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-
-model_eval = lm_eval.models.huggingface.HFLM(pretrained=model, tokenizer = tokenizer)
-result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], device=device, batch_size=8)
-print(result["results"])
-
-# TODO
-# > 
-# > Train with bias included.
-# > Train again on 2 factors with / small models.
-# > Try reshaping ? what did you mean here?
+model.save_pretrained('./my_model_directory')
 
 
 
-from transformers import GPT2LMHeadModel
+
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import lm_eval
 import torch
 
-model       = GPT2LMHeadModel.from_pretrained("gpt2")
+device = "cuda:0"
+
+tokenizer1  = GPT2Tokenizer.from_pretrained("gpt2")
+model       = GPT2LMHeadModel.from_pretrained("./tt1")
+
+model.to(device)
+
 lm_eval.tasks.initialize_tasks() 
-model_eval = lm_eval.models.huggingface.HFLM(pretrained=model)
-result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], batch_size=8)
+
+model_eval = lm_eval.models.huggingface.HFLM(pretrained=model, tokenizer = tokenizer1)
+
+result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], batch_size=8, device = device)
+
+print(result["results"])
 """
