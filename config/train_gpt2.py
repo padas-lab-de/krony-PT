@@ -13,23 +13,24 @@ weight_decay = 1e-1
 min_lr = 6e-5 
 
 cut_the_run = max_iters 
-gradient_accumulation_steps = 4
-batch_size = 8
+gradient_accumulation_steps = 2
+batch_size = 32
 
-warmup_iters =  1000
+warmup_iters =  500
 lr_decay_iters = max_iters 
 
 
 wandb_log = True 
 wandb_project = 'bias_included'
 
-wandb_run_name= "128_32_gpt2_bias_4_8"
+# grad acc / batch size
+wandb_run_name= "64_24_gpt2_bias_2_32"
 
-dim1 = 128
-dim2 = 32
+dim1 = 64
+dim2 = 24
 
 init_from = "prune"
-init_name = "out/128_32_gpt2_bias.pt"
+init_name = "out2/VL_64_24.pt"
 
 
 

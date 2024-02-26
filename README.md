@@ -11,7 +11,9 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ---
 ### **TODO:** <a name="todo">
 
-* debugg 101:
+* Convert the TQCompressor, to GPT, then evaluate using lm_eval
+
+* debugg 101: DONE, woohoo. Issue fixed.
 	* run the forward fucking pass. i am sick of you
 	* run the same batch through HF-GPT and KronyGPT ? 
 	* please do not give the same output.

@@ -1,16 +1,9 @@
-from transformers import GPT2LMHeadModel, GPT2Config
+
 from model import *
 import numpy as np
 from model_origin import *
 
-import lm_eval
 import torch
-
-#config = GPT2Config.from_pretrained("gpt2")
-#config.attn_pdrop = 0.0
-#config.embd_pdrop = 0.0
-#config.resid_pdrop = 0.0
-#model1 = GPT2LMHeadModel(config)
 
 if True:
     config_args = dict(
@@ -56,18 +49,6 @@ if True:
         model.train()
         return out
 
-
-sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_27900.pt")
-for pn,p in list(sd_krony.items()):
-	if pn.startswith("module"):
-		sd_krony[pn[7:]] = sd_krony.pop(pn)
-
-k_krony = sd_krony.keys()
-krony_conf = KronyGPTConfig(**config_args)
-krony = KronyGPT(krony_conf)
-
-# Loading the GPTs:
-if True:
     config0 = dict(
         n_layer=12, 
         n_head=12, 
@@ -77,46 +58,48 @@ if True:
         bias = True,
     )
 
-    conf = GPTConfig(**config0)
-    gpt1 = GPT(conf)
-    sd1 = torch.load("out/GPT2.pt")
-    gpt1.load_state_dict(sd1)
+
+sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_27900.pt")
+for pn,p in list(sd_krony.items()):
+	if pn.startswith("module"):
+		sd_krony[pn[7:]] = sd_krony.pop(pn)
+
+# the state_dict for Krony is this sd_krony (without the bias)
+
+krony_conf = KronyGPTConfig(**config_args)
+krony = KronyGPT(krony_conf)
+
+# Loading the GPTs:
+
+# gpt init
+conf = GPTConfig(**config0)
+gpt = GPT(conf)
+sd1 = gpt.state_dict()
+k1  = sd1.keys()
 
 
-sd1 = gpt1.state_dict()
-k1 = sd1.keys() 
+# I am loading the old format of kronyPT, namely without the bias. Hence, I have to fill.
 
-# HF model:
-model  = GPT2LMHeadModel.from_pretrained("gpt2")
-sd     = model.state_dict()
-k      = sd.keys()
-
-# from normal GPT to HF:
-assert set(k1) == set(k), "Andrej implementation doesn't matche HF-GPT2"
-miss = [i for i in k if not torch.equal(sd[i], sd1[i])]
-
-transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-
-match_test = []
-for i in k:
-    if any(i.endswith(gg) for gg in transposed):
-        x = torch.equal(sd[i].t(), sd1[i])
-    else:
-        x = torch.equal(sd[i], sd1[i])
-    match_test.append(x)
-    
-
-# step 1: From Krony GPT sd    TO    Anrej GPT sd 
-sd_krony = krony.state_dict()
 sd_k = sd_krony.keys()
-
 l_common = [i for i in k1 if i in sd_k] #common
-
 l  = [i for i in k1 if i not in sd_k]
 l_weight = [i for i in l if i.endswith(".weight")]
 l_bias   = [i for i in l if not i.endswith(".weight")]
 
+tintin = {k: v for k, v in sd_krony.items()}
+
+int_sd = krony.state_dict()
+for i in int_sd.keys():
+    if i not in sd_krony.keys():
+        x = int_sd[i].shape
+        tintin[i] = torch.zeros(x)
+        
+krony.load_state_dict(tintin)
+
 def kron_to_gpt(state_d):
+    """
+    Converts a KronyPT (GPT with Kroneckers as MLP) to Normal GPT
+    """
     wow = {}
     for i in l_common:
         wow[i] = state_d[i]
@@ -125,6 +108,7 @@ def kron_to_gpt(state_d):
     for i in l_bias:
         s = sd1[i].shape
         wow[i] = torch.zeros(s)
+
     # kroneckers
     for i in l_weight:
         f0 = i[:-7]+"_0_0"
@@ -134,13 +118,13 @@ def kron_to_gpt(state_d):
         wow[i] = torch.kron(m0,m1)
     return wow
 
-wow = kron_to_gpt(sd_krony)
-
-# step 2: From  Anrej GPT sd   TO    HF GPT
+from transformers import GPT2LMHeadModel, GPT2Config
+model  = GPT2LMHeadModel.from_pretrained("gpt2")
+k    = model.state_dict().keys()
 
 def hf_gpt_sd(sdd):
     wow1 = {}
-
+    transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
     k1 = [i for i in k if any(i.endswith(hh) for hh in transposed)] 
     k2 = [i for i in k if  not any(i.endswith(hh) for hh in transposed)] 
 
@@ -148,41 +132,48 @@ def hf_gpt_sd(sdd):
         wow1[i] = sdd[i].t()
     for i in k2:
         wow1[i] = sdd[i]
-
     return wow1
-    
-sd_f = hf_gpt_sd(sd1)    
 
 
+wow = kron_to_gpt(sd_krony)
+w = hf_gpt_sd(wow)
 
 
-model.load_state_dict(sd_f)
-model.save_pretrained('./tt1')
+gpt.load_state_dict(wow)
+model.load_state_dict(w)
 
+model.save_pretrained('./ww3')
 
-
+ 
 """
-model.save_pretrained('./my_model_directory')
+x, y = get_batch("train")
+
+#model.to(device)
+krony.to(device)
+gpt.to(device)
+
+#r2 = model(x)
+r = krony(x)
+r1 = gpt(x)
+
+
+for i in range(5):
+    print("\n>> Batch > \n")
+    print(f"{r[0][i][0,:10]}")
+    print(f"{r1[0][i][0,:10]}")
+#    print(f"{r2[0][i][-1][:10]}")
+
+# step 2: From  Anrej GPT sd   TO    HF GPT
+gpt.load_state_dict(wow)
+krony.to(device)
+gpt.to(device)
 
 
 
+print(f"Computing the loss over {eval_iters} batches of 12")
+print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
 
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
-import lm_eval
-import torch
+print(f"Computing the loss over {eval_iters} batches of 12")
+print(f"Loss for krony with zeros bias >>  {estimate_loss(gpt)}")
 
-device = "cuda:0"
-
-tokenizer1  = GPT2Tokenizer.from_pretrained("gpt2")
-model       = GPT2LMHeadModel.from_pretrained("./tt1")
-
-model.to(device)
-
-lm_eval.tasks.initialize_tasks() 
-
-model_eval = lm_eval.models.huggingface.HFLM(pretrained=model, tokenizer = tokenizer1)
-
-result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], batch_size=8, device = device)
-
-print(result["results"])
 """

@@ -23,14 +23,11 @@ if True:
         return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
 
 x, y = get_batch("train")
-# In this script, I convert a model.
-
 
 #GPT2 king
 gpt2= GPT2LMHeadModel.from_pretrained("gpt2")
 sd = gpt2.state_dict()
 k = sd.keys()
-
 
 if True:
     config0 = dict(
