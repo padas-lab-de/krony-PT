@@ -120,13 +120,13 @@ def kron_to_gpt(state_d):
 
 from transformers import GPT2LMHeadModel, GPT2Config
 model  = GPT2LMHeadModel.from_pretrained("gpt2")
-k    = model.state_dict().keys()
+gpt2_keys    = model.state_dict().keys()
 
-def hf_gpt_sd(sdd):
+def hf_gpt_sd(sdd, gpt_keys):
     wow1 = {}
     transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-    k1 = [i for i in k if any(i.endswith(hh) for hh in transposed)] 
-    k2 = [i for i in k if  not any(i.endswith(hh) for hh in transposed)] 
+    k1 = [i for i in gpt_keys if any(i.endswith(hh) for hh in transposed)] 
+    k2 = [i for i in gpt_keys if  not any(i.endswith(hh) for hh in transposed)] 
 
     for i in k1:
         wow1[i] = sdd[i].t()
@@ -134,9 +134,8 @@ def hf_gpt_sd(sdd):
         wow1[i] = sdd[i]
     return wow1
 
-
 wow = kron_to_gpt(sd_krony)
-w = hf_gpt_sd(wow)
+w = hf_gpt_sd(wow, gpt2_keys)
 
 
 gpt.load_state_dict(wow)
@@ -144,8 +143,6 @@ model.load_state_dict(w)
 
 model.save_pretrained('./ww3')
 
- 
-"""
 x, y = get_batch("train")
 
 #model.to(device)
@@ -163,6 +160,8 @@ for i in range(5):
     print(f"{r1[0][i][0,:10]}")
 #    print(f"{r2[0][i][-1][:10]}")
 
+
+"""
 # step 2: From  Anrej GPT sd   TO    HF GPT
 gpt.load_state_dict(wow)
 krony.to(device)

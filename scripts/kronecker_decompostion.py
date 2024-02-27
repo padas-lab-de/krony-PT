@@ -97,7 +97,7 @@ def kron_it(checkpoint, config: dict):
 	return new
 
 # change here 
-conf = {"dim"   : (64, 24),  # the dims of A (m_1, n_1) following latex notation
+conf = {"dim"   : (768, 768),  # the dims of A (m_1, n_1) following latex notation
 		 "n_factors" : 1
 }
 
@@ -109,8 +109,8 @@ config_args = dict(
 	vocab_size = 50257,
 	block_size = 1024,
 	bias = True,
-	dim_1 = 64,
-	dim_2 = 24 
+	dim_1 = 768,
+	dim_2 = 768 
 )
 
 krony_conf = KronyGPTConfig(**config_args)
@@ -130,7 +130,7 @@ for i in pt_2:
 kronyG.load_state_dict(new) 
  
 print("3. Saving!")
-#torch.save(new, "out2/VL_64_24.pt")
+torch.save(new, "out2/VL_768_768.pt")
 		
 """
 

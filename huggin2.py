@@ -7,20 +7,19 @@ from model_origin import *
 #import lm_eval
 import torch
 
-if True: 
-    batch_size = 12
-    block_size = 1024
-    device = "cuda"
-
-    path = 'data/openwebtext/'
-    train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
-    val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
-    def get_batch(split):
-        data = train_data if split == 'train' else val_data
-        ix = torch.randint(len(data) - block_size, (batch_size,))
-        x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
-        y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-        return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+batch_size = 12
+block_size = 1024
+device = "cuda"
+##
+path = 'data/openwebtext/'
+train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
+val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
+def get_batch(split):
+    data = train_data if split == 'train' else val_data
+    ix = torch.randint(len(data) - block_size, (batch_size,))
+    x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
+    y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+    return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
 
 x, y = get_batch("train")
 
@@ -29,17 +28,17 @@ gpt2= GPT2LMHeadModel.from_pretrained("gpt2")
 sd = gpt2.state_dict()
 k = sd.keys()
 
-if True:
-    config0 = dict(
-        n_layer=12, 
-        n_head=12, 
-        n_embd=768,
-        vocab_size = 50257,
-        block_size = 1024,
-        bias = True,
-    )
+## GPT torch / normal
+config0 = dict(
+    n_layer=12, 
+    n_head=12, 
+    n_embd=768,
+    vocab_size = 50257,
+    block_size = 1024,
+    bias = True,
+)
 
-    conf = GPTConfig(**config0)
+conf = GPTConfig(**config0)
 
 gpt0 = GPT(conf)
 gpt0 = gpt0.from_pretrained("gpt2")

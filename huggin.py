@@ -162,10 +162,8 @@ model.save_pretrained('./tt1')
 
 
 """
+
 model.save_pretrained('./my_model_directory')
-
-
-
 
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
 import lm_eval

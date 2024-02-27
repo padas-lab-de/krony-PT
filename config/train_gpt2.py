@@ -14,7 +14,7 @@ min_lr = 6e-5
 
 cut_the_run = max_iters 
 gradient_accumulation_steps = 2
-batch_size = 32
+batch_size = 16
 
 warmup_iters =  500
 lr_decay_iters = max_iters 
@@ -24,13 +24,13 @@ wandb_log = True
 wandb_project = 'bias_included'
 
 # grad acc / batch size
-wandb_run_name= "64_24_gpt2_bias_2_32"
+wandb_run_name= "1536_384_2_16"
 
-dim1 = 64
-dim2 = 24
+dim1 = 1536
+dim2 =  384
 
 init_from = "prune"
-init_name = "out2/VL_64_24.pt"
+init_name = "out2/VL_1536_384.pt"
 
 
 
