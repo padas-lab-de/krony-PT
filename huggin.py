@@ -179,7 +179,6 @@ model.to(device)
 lm_eval.tasks.initialize_tasks() 
 
 model_eval = lm_eval.models.huggingface.HFLM(pretrained=model, tokenizer = tokenizer1)
-
 result  = lm_eval.evaluator.simple_evaluate(model_eval, tasks=["wikitext"], batch_size=8, device = device)
 
 print(result["results"])

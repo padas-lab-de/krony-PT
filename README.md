@@ -15,7 +15,7 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 * Try the other state_dict for the 95M.
 
 * Mixed strategy:
-	* Run all configs that could take us to 81M 
+	* Run all configs that could take us to 81M  [DONE]
 	* Maybe only decompose a few matrices // Not all of them
 	* See which group could sacrifice? say d_1 is the small one, resp. d_2
 		* make first 6  layers d_1 and second 6 layers d_2, and vice versa, and train them.

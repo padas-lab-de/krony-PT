@@ -13,8 +13,8 @@ if True:
         vocab_size = 50257,
         block_size = 1024,
         bias = True,
-        dim_1 = 3072,
-        dim_2 = 384
+        dim_1 = 768,
+        dim_2 = 768
     )
 
     batch_size = 12
@@ -59,7 +59,8 @@ if True:
     )
 
 
-sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_27900.pt")
+#sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_27900.pt")
+sd_krony =  torch.load(f"checkpt2/768_768_2_32_iteration_171000.pt")
 for pn,p in list(sd_krony.items()):
 	if pn.startswith("module"):
 		sd_krony[pn[7:]] = sd_krony.pop(pn)
@@ -68,33 +69,26 @@ for pn,p in list(sd_krony.items()):
 
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
-
+krony.load_state_dict(sd_krony)    #loading the checkpoint
 # Loading the GPTs:
 
 # gpt init
 conf = GPTConfig(**config0)
-gpt = GPT(conf)
-sd1 = gpt.state_dict()
-k1  = sd1.keys()
+gpt  = GPT(conf)
+sd1  = gpt.state_dict()
+k1   = sd1.keys()
 
 
 # I am loading the old format of kronyPT, namely without the bias. Hence, I have to fill.
-
 sd_k = sd_krony.keys()
+
 l_common = [i for i in k1 if i in sd_k] #common
-l  = [i for i in k1 if i not in sd_k]
+l        = [i for i in k1 if i not in sd_k]
 l_weight = [i for i in l if i.endswith(".weight")]
 l_bias   = [i for i in l if not i.endswith(".weight")]
 
-tintin = {k: v for k, v in sd_krony.items()}
 
-int_sd = krony.state_dict()
-for i in int_sd.keys():
-    if i not in sd_krony.keys():
-        x = int_sd[i].shape
-        tintin[i] = torch.zeros(x)
-        
-krony.load_state_dict(tintin)
+       
 
 def kron_to_gpt(state_d):
     """
@@ -106,8 +100,10 @@ def kron_to_gpt(state_d):
 
     # bias:
     for i in l_bias:
-        s = sd1[i].shape
-        wow[i] = torch.zeros(s)
+#        s = sd1[i].shape
+#        wow[i] = torch.zeros(s)
+        s = i[:-5]+"_bias"
+        wow[i] = state_d[s]
 
     # kroneckers
     for i in l_weight:
@@ -118,9 +114,6 @@ def kron_to_gpt(state_d):
         wow[i] = torch.kron(m0,m1)
     return wow
 
-from transformers import GPT2LMHeadModel, GPT2Config
-model  = GPT2LMHeadModel.from_pretrained("gpt2")
-gpt2_keys    = model.state_dict().keys()
 
 def hf_gpt_sd(sdd, gpt_keys):
     wow1 = {}
@@ -134,15 +127,18 @@ def hf_gpt_sd(sdd, gpt_keys):
         wow1[i] = sdd[i]
     return wow1
 
+from transformers import GPT2LMHeadModel, GPT2Config
+model  = GPT2LMHeadModel.from_pretrained("gpt2")
+gpt2_keys    = model.state_dict().keys()
+
 wow = kron_to_gpt(sd_krony)
 w = hf_gpt_sd(wow, gpt2_keys)
-
-
 gpt.load_state_dict(wow)
 model.load_state_dict(w)
+model.save_pretrained('./models/171000')
 
-model.save_pretrained('./ww3')
-
+print("done - Good luck!")
+"""
 x, y = get_batch("train")
 
 #model.to(device)
@@ -153,21 +149,14 @@ gpt.to(device)
 r = krony(x)
 r1 = gpt(x)
 
-
 for i in range(5):
     print("\n>> Batch > \n")
     print(f"{r[0][i][0,:10]}")
     print(f"{r1[0][i][0,:10]}")
 #    print(f"{r2[0][i][-1][:10]}")
 
-
-"""
 # step 2: From  Anrej GPT sd   TO    HF GPT
-gpt.load_state_dict(wow)
-krony.to(device)
-gpt.to(device)
-
-
+# load the models to gpu first
 
 print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
@@ -175,4 +164,15 @@ print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
 print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for krony with zeros bias >>  {estimate_loss(gpt)}")
 
+############################################################################
+> This block was nece. before, when I used to train models with no bias.
+
+tintin = {k: v for k, v in sd_krony.items()}
+
+int_sd = krony.state_dict()
+for i in int_sd.keys():
+    if i not in sd_krony.keys():
+        x = int_sd[i].shape
+        tintin[i] = torch.zeros(x)
+ 
 """
