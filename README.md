@@ -11,6 +11,9 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 ---
 ### **TODO:** <a name="todo">
 
+* Try the Embedding decom after training.
+* Train 95M longer / then decompose embedding.
+* Fixed lr adaptation
 
 * Try the other state_dict for the 95M.
 
