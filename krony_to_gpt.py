@@ -60,7 +60,7 @@ if True:
 
 
 #sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_27900.pt")
-sd_krony =  torch.load(f"checkpt2/768_768_2_32_iteration_171000.pt")
+sd_krony =  torch.load(f"checkpt2/768_768_2_32_iteration_180000.pt")
 for pn,p in list(sd_krony.items()):
 	if pn.startswith("module"):
 		sd_krony[pn[7:]] = sd_krony.pop(pn)
@@ -86,9 +86,6 @@ l_common = [i for i in k1 if i in sd_k] #common
 l        = [i for i in k1 if i not in sd_k]
 l_weight = [i for i in l if i.endswith(".weight")]
 l_bias   = [i for i in l if not i.endswith(".weight")]
-
-
-       
 
 def kron_to_gpt(state_d):
     """
@@ -135,9 +132,10 @@ wow = kron_to_gpt(sd_krony)
 w = hf_gpt_sd(wow, gpt2_keys)
 gpt.load_state_dict(wow)
 model.load_state_dict(w)
-model.save_pretrained('./models/171000')
+model.save_pretrained('./models/180000')
 
 print("done - Good luck!")
+
 """
 x, y = get_batch("train")
 
@@ -158,13 +156,16 @@ for i in range(5):
 # step 2: From  Anrej GPT sd   TO    HF GPT
 # load the models to gpu first
 
+krony.to(device)
 print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
 
 print(f"Computing the loss over {eval_iters} batches of 12")
 print(f"Loss for krony with zeros bias >>  {estimate_loss(gpt)}")
 
+
 ############################################################################
+
 > This block was nece. before, when I used to train models with no bias.
 
 tintin = {k: v for k, v in sd_krony.items()}

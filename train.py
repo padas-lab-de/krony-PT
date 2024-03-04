@@ -100,7 +100,7 @@ if ddp:
 else:
     # if not ddp, we are running on a single gpu, and one process
     master_process = True
-    seed_offset = 435
+    seed_offset = 1350
     ddp_world_size = 1
 
 
@@ -109,7 +109,7 @@ ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 
-torch.manual_seed(177 + seed_offset)
+torch.manual_seed(1009 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
@@ -292,8 +292,10 @@ while iter_num < cut_the_run:
 				#"mfu": running_mfu*100, # convert to percentage
 			})
 
+
 	if iter_num == 0 and eval_only:
 		break
+
 
 # forward backward update, with optional gradient accumulation to simulate larger batch size
 # and using the GradScaler if data type is float16
@@ -325,7 +327,7 @@ while iter_num < cut_the_run:
      
 #print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
 
-	if iter_num > 1 and iter_num % 9000 == 0 and master_process:
+	if iter_num % eval_interval == 0 and losses["val"] < 3.12 and master_process:
 		print(f"Saving the checkpoint at iteration {iter_num}!")
 		torch.save(model.state_dict(), f"checkpt2/{wandb_run_name}_iteration_{iter_num}.pt")
 
