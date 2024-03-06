@@ -327,9 +327,13 @@ while iter_num < cut_the_run:
      
 #print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
 
-	if iter_num % eval_interval == 0 and losses["val"] < 3.12 and master_process:
+	if iter_num % eval_interval == 0 and losses["val"] < 3.10 and master_process:
 		print(f"Saving the checkpoint at iteration {iter_num}!")
-		torch.save(model.state_dict(), f"checkpt2/{wandb_run_name}_iteration_{iter_num}.pt")
+		torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
+		break
+	if iter_num % 9999 == 0 and master_process:
+		print(f"Saving the checkpoint at iteration {iter_num}!")
+		torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	iter_num += 1
 	local_iter_num += 1
