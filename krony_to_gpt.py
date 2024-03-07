@@ -1,9 +1,9 @@
-
-from model import *
-import numpy as np
-from model_origin import *
-
 import torch
+import numpy as np
+
+from model_origin import *
+from model import *
+
 
 if True:
     config_args = dict(
@@ -59,18 +59,16 @@ if True:
     )
 
 
-#sd_krony =  torch.load(f"checkpoints/gpt2-prune-new_init_1_iteration_27900.pt")
-sd_krony =  torch.load(f"checkpt2/768_768_2_32_iteration_180000.pt")
-for pn,p in list(sd_krony.items()):
-	if pn.startswith("module"):
-		sd_krony[pn[7:]] = sd_krony.pop(pn)
+check_f = [
+            "./imp-checks/gold_gold_4_32_iteration_4000.pt",
+            "./imp-checks/gold_gold_4_32_iteration_1350.pt",
+]
 
-# the state_dict for Krony is this sd_krony (without the bias)
+sd_krony =  torch.load(check_f[0])
 
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
-krony.load_state_dict(sd_krony)    #loading the checkpoint
-# Loading the GPTs:
+krony.load_state_dict(sd_krony)    
 
 # gpt init
 conf = GPTConfig(**config0)
@@ -97,8 +95,6 @@ def kron_to_gpt(state_d):
 
     # bias:
     for i in l_bias:
-#        s = sd1[i].shape
-#        wow[i] = torch.zeros(s)
         s = i[:-5]+"_bias"
         wow[i] = state_d[s]
 
@@ -124,15 +120,19 @@ def hf_gpt_sd(sdd, gpt_keys):
         wow1[i] = sdd[i]
     return wow1
 
+
+
+
 from transformers import GPT2LMHeadModel, GPT2Config
 model  = GPT2LMHeadModel.from_pretrained("gpt2")
 gpt2_keys    = model.state_dict().keys()
 
 wow = kron_to_gpt(sd_krony)
 w = hf_gpt_sd(wow, gpt2_keys)
+
 gpt.load_state_dict(wow)
 model.load_state_dict(w)
-model.save_pretrained('./models/180000')
+model.save_pretrained('./models/4000')
 
 print("done - Good luck!")
 

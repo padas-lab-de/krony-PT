@@ -39,7 +39,7 @@ for n1 in n_pot:
 		if l1*l2 == 768:
 			s = n1*m1 + n2*m2
 			sums.add(s)
-			comb.append([s, (n1, m1), (n2, m2)])
+			comb.append([s, (n2, m2)])
 
 comb = sorted(comb)
 
