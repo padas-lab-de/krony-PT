@@ -274,6 +274,7 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
+bench = 3.12
 while iter_num < cut_the_run:
 # determine and set the learning rate for this iteration
 	lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -327,10 +328,11 @@ while iter_num < cut_the_run:
      
 #print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
 
-	if iter_num % eval_interval == 0 and losses["val"] < 3.10 and master_process:
-		print(f"Saving the checkpoint at iteration {iter_num}!")
+	if iter_num % eval_interval == 0 and losses["val"] < bench and master_process:
+		bench = losses["val"]
+		print(f"Saving the checkpoint at iteration {iter_num}! for {bench}")
 		torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
-		break
+
 	if iter_num % 9999 == 0 and master_process:
 		print(f"Saving the checkpoint at iteration {iter_num}!")
 		torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
@@ -342,7 +344,7 @@ while iter_num < cut_the_run:
 		break
 
 if master_process:
-    torch.save(model.state_dict(), f"checkpt2/{wandb_run_name}_iteration_{iter_num}.pt")
+    torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
     print("\n >>>> Some data stats >>>> \n")
     print(f"ddp_world_size {ddp_world_size}")
     print(f"gradient blabla {gradient_accumulation_steps}")

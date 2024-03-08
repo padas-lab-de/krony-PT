@@ -54,8 +54,9 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
 
 device = torch.device("cuda")
 
+from transformers import GPT2LMHeadModel
 
-gpt= torch.load('out/GPT2.pt', map_location=device)
+gpt = GPT2LMHeadModel.from_pretrained("gpt2").state_dict()
 k_origin= list(gpt.keys())
 
 def kron_it(checkpoint, config: dict):
@@ -97,11 +98,12 @@ def kron_it(checkpoint, config: dict):
 	return new
 
 # change here 
-conf = {"dim"   : (768, 768),  # the dims of A (m_1, n_1) following latex notation
-		 "n_factors" : 1
+conf = {"dim"   : (64, 32),  # the dims of A (m_1, n_1) following latex notation
+		 "n_factors" : 20
 }
 
 # Setting up a quick KronyGPT
+
 config_args = dict(
 	n_layer=12, 
 	n_head=12, 
@@ -109,28 +111,26 @@ config_args = dict(
 	vocab_size = 50257,
 	block_size = 1024,
 	bias = True,
-	dim_1 = 768,
-	dim_2 = 768 
+	dim_1 = 64,
+	dim_2 = 32 
 )
 
-krony_conf = KronyGPTConfig(**config_args)
-kronyG = KronyGPT(krony_conf)
-krony_sd   = kronyG.state_dict()
-k_krony    = krony_sd.keys()  # krony keys // 173
+#krony_conf = KronyGPTConfig(**config_args)
+#kronyG = KronyGPT(krony_conf)
+#krony_sd   = kronyG.state_dict()
+#k_krony    = krony_sd.keys()  # krony keys // 173
 
 print("2. Decomposing")
 new = kron_it(gpt, conf)
 
-pt_1 = list(new.keys())
-pt_2 = [i for i in k_krony if i not in pt_1]
-
-for i in pt_2:
-    new[i] = gpt[i]
-  
-kronyG.load_state_dict(new) 
+#pt_1 = list(new.keys())
+#pt_2 = [i for i in k_krony if i not in pt_1]
+#for i in pt_2:
+#    new[i] = gpt[i]
+#kronyG.load_state_dict(new) 
  
 print("3. Saving!")
-torch.save(new, "out2/VL_768_768.pt")
+#torch.save(new, "out2/VL_768_768.pt")
 		
 """
 
