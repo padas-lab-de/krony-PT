@@ -4,7 +4,7 @@ Add links:
 
 
 
-TODO:
+# TODO:
 
 Report writing:
 * Finish section on Kronecker Structure.
@@ -25,3 +25,6 @@ Runs over the week-end:
 
 * See how much factors you can pack with 67M.
 * Train the max you can with 82M.
+
+# DONE:
+

@@ -292,7 +292,10 @@ while iter_num < cut_the_run:
 				"lr": lr
 				#"mfu": running_mfu*100, # convert to percentage
 			})
-
+		if losses["val"] < bench:
+			bench = losses["val"]
+			print(f"Saving the checkpoint at iteration v{iter_num}! for {bench}")
+			torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	if iter_num == 0 and eval_only:
 		break
@@ -317,7 +320,7 @@ while iter_num < cut_the_run:
 		# backward pass, with gradient scaling if training in fp16
 		scaler.scale(loss).backward()
 
-# clip the gradient
+	print(f">>> Iter {iter_num} Loss {loss}")
 	if grad_clip != 0.0:
 		scaler.unscale_(optimizer)
 		torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -325,13 +328,8 @@ while iter_num < cut_the_run:
 	scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
 	scaler.update()
 	optimizer.zero_grad(set_to_none=True)
-     
-#print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
-
-	if iter_num % eval_interval == 0 and losses["val"] < bench and master_process:
-		bench = losses["val"]
-		print(f"Saving the checkpoint at iteration {iter_num}! for {bench}")
-		torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
+		
+	#print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
 
 	if iter_num % 9999 == 0 and master_process:
 		print(f"Saving the checkpoint at iteration {iter_num}!")

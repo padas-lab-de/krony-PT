@@ -13,7 +13,8 @@ change the **conf** dict to your liking.
 
 import torch
 from einops import rearrange
-from model import *
+from mmodel import *
+from model_origin import *
 
 # add original link to the implementation. > I'm following her on Twitter, Hailey smth.
 def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
@@ -97,9 +98,49 @@ def kron_it(checkpoint, config: dict):
 		
 	return new
 
+def kron_it_2(checkpoint, config: dict):
+	print(f"This will return two factors of dims {config['dim']} \
+     and {(3072//config['dim'][0], 768//config['dim'][1])}")
+
+	n_layer = 12      
+	fac = config["n_factors"]
+	new = dict()
+
+	for i in range(n_layer):
+		c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+		c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
+
+		cfc_h = kronecker_decompose(
+			checkpoint[c_fc_key],
+			config["dim"][0],
+			config["dim"][1],
+			k = fac
+			)
+
+		cproj_h = kronecker_decompose(
+			checkpoint[c_proj_key],
+			config["dim"][1],
+			config["dim"][0],
+			k = fac
+			)
+
+		for k in range(2):
+			fc = f"transformer.h.{i}.mlp.c_fc_{k}"
+			proj = f"transformer.h.{i}.mlp.c_proj_{k}" 
+			new[fc]   = cfc_h[k]
+			new[proj] =  cproj_h[k]
+
+		new[f"{c_fc_key[:-7]}_bias"]   = gpt[f"{c_fc_key[:-7]}.bias"]
+		new[f"{c_proj_key[:-7]}_bias"] = gpt[f"{c_proj_key[:-7]}.bias"]
+		
+	return new
 # change here 
-conf = {"dim"   : (64, 32),  # the dims of A (m_1, n_1) following latex notation
-		 "n_factors" : 20
+
+dim1 = 3
+dim2 = 12
+facss = 2
+conf = {"dim"   : (dim1, dim2),  # the dims of A (m_1, n_1) following latex notation
+		 "n_factors" : facss
 }
 
 # Setting up a quick KronyGPT
@@ -111,29 +152,86 @@ config_args = dict(
 	vocab_size = 50257,
 	block_size = 1024,
 	bias = True,
-	dim_1 = 64,
-	dim_2 = 32 
+	dim_1 = dim1,
+	dim_2 = dim2,
+	factors = facss 
 )
 
-#krony_conf = KronyGPTConfig(**config_args)
-#kronyG = KronyGPT(krony_conf)
-#krony_sd   = kronyG.state_dict()
-#k_krony    = krony_sd.keys()  # krony keys // 173
+krony_conf = KronyGPTConfig(**config_args)
+kronyG = KronyGPT(krony_conf)
+krony_sd   = kronyG.state_dict()
+k_krony    = krony_sd.keys()
 
-print("2. Decomposing")
-new = kron_it(gpt, conf)
+sd = kron_it_2(gpt, conf)
 
-#pt_1 = list(new.keys())
-#pt_2 = [i for i in k_krony if i not in pt_1]
-#for i in pt_2:
-#    new[i] = gpt[i]
-#kronyG.load_state_dict(new) 
- 
-print("3. Saving!")
+transposed = ['attn.c_attn.weight', 'attn.c_proj.weight']
+#transposed = ['attn.c_attn.weight']
+
+for k in k_origin:
+	if any(k.endswith(w) for w in transposed):
+		sd[k] = gpt[k].t()
+
+rest = [i for i in k_krony if i not in sd.keys()]
+
+for i in rest:
+    sd[i] = gpt[i]
+
+kronyG.load_state_dict(sd) 
+
+#print("3. Saving!")
 #torch.save(new, "out2/VL_768_768.pt")
-		
-"""
 
+
+##### Testing: ##########################################################################
+
+if True:
+	config0 = dict(
+		n_layer=12, 
+		n_head=12, 
+		n_embd=768,
+		vocab_size = 50257,
+		block_size = 1024,
+		bias = True,
+	)
+	conf = GPTConfig(**config0)
+
+	import numpy as np
+
+	batch_size = 12
+	block_size = 1024
+	device = "cuda"
+	##
+	path = 'data/openwebtext/'
+	train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
+	val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
+	def get_batch(split):
+		data = train_data if split == 'train' else val_data
+		ix = torch.randint(len(data) - block_size, (batch_size,))
+		x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
+		y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
+		return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
+
+x, y = get_batch("train")
+
+gpt0 = GPT(conf)
+gpt0 = gpt0.from_pretrained("gpt2")
+sd0  = gpt0.state_dict()
+gpt0.to(device)
+kronyG.to(device)
+
+
+r0 = gpt0(x)
+r2 = kronyG(x)
+
+for i in range(12):
+    print("Batch > \n")
+    print(f"{r0[0][i][0,:10]}")
+    print(f"{r2[0][i][0,:10]}")
+
+
+
+
+"""
 nms = list(sd.keys())
 one_block = nms[2:14]
 
