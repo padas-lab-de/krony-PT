@@ -77,6 +77,7 @@ if True:
     decay_lr = True # whether to decay the learning rate
     dim1 = 17
     dim2 = 177
+    factors = 1000
 
 config_keys = [k for k,v in globals().items() if not k.startswith('_') and isinstance(v, (int, float, bool, str))]
 exec(open('configurator.py').read()) # overrides from command line or config file
@@ -150,7 +151,10 @@ if os.path.exists(meta_path):
 
 # model init 
 model_args = dict(n_layer=n_layer, n_head=n_head, n_embd=n_embd, block_size=block_size,
-                  bias=bias, vocab_size=None, dropout=dropout, dim_1=dim1, dim_2=dim2
+                  bias=bias, vocab_size=None, dropout=dropout, 
+                  dim_1=dim1, 
+                  dim_2=dim2,
+                  factors = factors
                   ) # start with model_args from command line
 
 ## params loading scratch / resume of gpt2
@@ -180,8 +184,11 @@ else:
     # create the model
     #model_args["dim1"] = dim1
     #model_args["dim2"] = dim2
+    #model_args["factors"] = factors
     model_args['vocab_size'] = 50257
     model_args['bias'] = True
+   
+    print("we here god  damn it", model_args) 
 
     gptconf = KronyGPTConfig(**model_args)
         
@@ -237,7 +244,6 @@ if master_process:
     print(f"Train data size {len(train_data):_}")
     print(f"To see all data we need {len(train_data)/tpi:_} iterations")
     print(f"In {cut_the_run} iters. we are going to see {cut_the_run*tpi*100/len(train_data):.3f} % of the data")
-    print("\n >>>> Some data stats >>>> \n")
 
     print(">>>>> Training is starting now, here is some stats:")
     print("batch size",    batch_size) 
@@ -294,16 +300,11 @@ while iter_num < cut_the_run:
 			})
 		if losses["val"] < bench:
 			bench = losses["val"]
-			print(f"Saving the checkpoint at iteration v{iter_num}! for {bench}")
+			print(f"Saving the checkpoint at iteration {iter_num}! for {bench}")
 			torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	if iter_num == 0 and eval_only:
 		break
-
-
-# forward backward update, with optional gradient accumulation to simulate larger batch size
-# and using the GradScaler if data type is float16
-# apparently, we always use a gradient accumulation
 
 	for micro_step in range(gradient_accumulation_steps):
 		if ddp:
@@ -320,7 +321,9 @@ while iter_num < cut_the_run:
 		# backward pass, with gradient scaling if training in fp16
 		scaler.scale(loss).backward()
 
-	print(f">>> Iter {iter_num} Loss {loss}")
+	if iter_num % 21 == 0:
+		print(f">>> Iter {iter_num} Loss {loss*gradient_accumulation_steps}")
+
 	if grad_clip != 0.0:
 		scaler.unscale_(optimizer)
 		torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -342,7 +345,7 @@ while iter_num < cut_the_run:
 		break
 
 if master_process:
-    torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
+    torch.save(model.state_dict(), f"check2/F_{wandb_run_name}_iteration_{iter_num}.pt")
     print("\n >>>> Some data stats >>>> \n")
     print(f"ddp_world_size {ddp_world_size}")
     print(f"gradient blabla {gradient_accumulation_steps}")

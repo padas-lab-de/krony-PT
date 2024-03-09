@@ -90,8 +90,8 @@ class KronyMLP(nn.Module):
         
         self.c_fc_0   = nn.Parameter(torch.normal(0, 0.02, size      = [self.factors, self.dim1, self.dim2]))
         self.c_fc_1   = nn.Parameter(torch.normal(0, 0.02, size      = [self.factors, 768//self.dim1, 3072//self.dim2]))
-        self.c_proj_0 =    nn.Parameter(torch.normal(0, 0.02, size   = [self.factors, self.dim2, self.dim1]))
-        self.c_proj_1 =    nn.Parameter(torch.normal(0, 0.02, size   = [self.factors, 3072//self.dim2, 768//self.dim1]))
+        self.c_proj_0 = nn.Parameter(torch.normal(0, 0.02, size   = [self.factors, self.dim2, self.dim1]))
+        self.c_proj_1 = nn.Parameter(torch.normal(0, 0.02, size   = [self.factors, 3072//self.dim2, 768//self.dim1]))
 
         self.c_fc_bias = nn.Parameter(torch.zeros(3072))
         self.c_proj_bias  = nn.Parameter(torch.zeros(768))

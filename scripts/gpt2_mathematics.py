@@ -8,14 +8,14 @@ sd = gpt2.state_dict()
 sd.pop("lm_head.weight")  # this is basically a duplicate of the embedding matrix
 
 l_keys  = list(sd.keys())
-tot = 0
-tot = sum(p.numel() for pn,p in sd.items())
-print("tot = ",tot)
+
+print("GPT2 #params = ",sum(p.numel() for _,p in sd.items()))
 
 k1 = [i for i in l_keys if     i.startswith("transformer.h.")]
 
-k11 = [i for i in k1 if     any([i.endswith("mlp.c_fc.weight"), i.endswith("mlp.c_proj.weight")])]
-k12 = [i for i in k1 if i not in k11  ]
+k11 = [i for i in k1 if any([i.endswith("mlp.c_fc.weight"), i.endswith("mlp.c_proj.weight")])]
+k12 = [i for i in k1 if i not in k11] 
+
 k2 = [i for i in l_keys if not i.startswith("transformer.h.")]
 
 assert set(l_keys) == set(k1+k2), "the fuck is going on?"
@@ -56,3 +56,4 @@ s11 = sum(sd[i].numel() for i in k11)
 s12 = sum(sd[i].numel() for i in k12)
 
 
+c = lambda fac,m: s2 + s12 + 12*2*fac*m

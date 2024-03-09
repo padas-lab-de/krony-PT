@@ -88,34 +88,30 @@ class KronyMLP(nn.Module):
         self.dim1 = config.dim_1
         self.dim2 = config.dim_2
         
-        for f in range(config.factors):
-            setattr(self, f"c_fc_{f}_0"  ,   nn.Parameter(torch.normal(0, 0.02, 
-                                                                       size   = [self.dim1, self.dim2])))
-            setattr(self, f"c_fc_{f}_1"  ,   nn.Parameter(torch.normal(0, 0.02,
-                                                                        size   = [3072//self.dim1, 768//self.dim2])))
-            setattr(self, f"c_proj_{f}_0",   nn.Parameter(torch.normal(0, 0.02,
-                                                                        size   = [self.dim2, self.dim1])))
-            setattr(self, f"c_proj_{f}_1",   nn.Parameter(torch.normal(0, 0.02,
-                                                                        size   = [768//self.dim2, 3072//self.dim1])))
+        self.c_fc_0   = nn.Parameter(torch.normal(0, 0.02, size = [self.factors, self.dim1, self.dim2]))
+        self.c_fc_1   = nn.Parameter(torch.normal(0, 0.02, size = [self.factors, 768//self.dim1, 3072//self.dim2]))
+        self.c_proj_0 = nn.Parameter(torch.normal(0, 0.02, size = [self.factors, self.dim2, self.dim1]))
+        self.c_proj_1 = nn.Parameter(torch.normal(0, 0.02, size = [self.factors, 3072//self.dim2, 768//self.dim1]))
 
-        self.c_fc_bias = nn.Parameter(torch.zeros(3072))
+        self.c_fc_bias    = nn.Parameter(torch.zeros(3072))
         self.c_proj_bias  = nn.Parameter(torch.zeros(768))
 
         self.gelu    = nn.GELU()
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):
-        s_cfc =  [
-            torch.kron(getattr(self, f"c_fc_{f}_0"), getattr(self, f"c_fc_{f}_1"))
-            for f in range(self.factors)
-        ]
-        x = x @ torch.stack(s_cfc).sum(dim=0).T + self.c_fc_bias
+        s_cfc =  torch.kron(self.c_fc_0[0], self.c_fc_1[0])
+        for f in range(1, self.factors):
+            s_cfc += torch.kron(self.c_fc_0[f], self.c_fc_1[f])
+
+        x = x @ s_cfc + self.c_fc_bias
         x = self.gelu(x)
-        s_cproj =  [
-            torch.kron(getattr(self, f"c_proj_{f}_0"), getattr(self, f"c_proj_{f}_1"))
-            for f in range(self.factors)
-        ]
-        x = x @ torch.stack(s_cproj).sum(dim=0).T  + self.c_proj_bias
+
+        s_cproj =  torch.kron(self.c_proj_0[0], self.c_proj_1[0]) 
+        for f in range(1, self.factors):
+            s_cproj += torch.kron(self.c_proj_0[f], self.c_proj_1[f])
+        
+        x = x @ s_cproj  + self.c_proj_bias
         x = self.dropout(x)
         return x
 

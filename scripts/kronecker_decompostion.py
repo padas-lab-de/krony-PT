@@ -53,13 +53,6 @@ def kronecker_decompose(A , m: int, n: int, *, k: int = 1, niter: int = 10):
 	scale = s[..., None, None].sqrt()
 	return u * scale, v * scale
 
-device = torch.device("cuda")
-
-from transformers import GPT2LMHeadModel
-
-gpt = GPT2LMHeadModel.from_pretrained("gpt2").state_dict()
-k_origin= list(gpt.keys())
-
 def kron_it(checkpoint, config: dict):
 	print(f"This will return two factors of dims {config['dim']} \
      and {(3072//config['dim'][0], 768//config['dim'][1])}")
@@ -130,60 +123,113 @@ def kron_it_2(checkpoint, config: dict):
 			new[fc]   = cfc_h[k]
 			new[proj] =  cproj_h[k]
 
-		new[f"{c_fc_key[:-7]}_bias"]   = gpt[f"{c_fc_key[:-7]}.bias"]
-		new[f"{c_proj_key[:-7]}_bias"] = gpt[f"{c_proj_key[:-7]}.bias"]
-		
+		new[f"{c_fc_key[:-7]}_bias"]   = checkpoint[f"{c_fc_key[:-7]}.bias"]
+		new[f"{c_proj_key[:-7]}_bias"] = checkpoint[f"{c_proj_key[:-7]}.bias"]
 	return new
 # change here 
 
-dim1 = 3
-dim2 = 12
-facss = 2
-conf = {"dim"   : (dim1, dim2),  # the dims of A (m_1, n_1) following latex notation
-		 "n_factors" : facss
+device = torch.device("cuda")
+
+# loading GPT2 from HF:
+from transformers import GPT2LMHeadModel
+gpt 	  = GPT2LMHeadModel.from_pretrained("gpt2")
+gpt2_sd   = gpt.state_dict()
+gpt2_keys = list(gpt2_sd.keys())
+
+dim1 = 256	 
+dim2 = 1024 
+factors = 2 
+
+conf_decomp = {
+    "dim"   : (dim1, dim2),  # the dims of A (m_1, n_1) following latex notation
+	"n_factors" : factors
 }
 
-# Setting up a quick KronyGPT
+if True: # Setting up a quick KronyGPT
+	config_args = dict(
+		n_layer=12, 
+		n_head=12, 
+		n_embd=768,
+		vocab_size = 50257,
+		block_size = 1024,
+		bias = True,
+		dim_1 = dim1,
+		dim_2 = dim2,
+		factors = factors
+	)
 
-config_args = dict(
-	n_layer=12, 
-	n_head=12, 
-	n_embd=768,
-	vocab_size = 50257,
-	block_size = 1024,
-	bias = True,
-	dim_1 = dim1,
-	dim_2 = dim2,
-	factors = facss 
-)
-
+print("Loading KronyGPT")
 krony_conf = KronyGPTConfig(**config_args)
 kronyG = KronyGPT(krony_conf)
 krony_sd   = kronyG.state_dict()
 k_krony    = krony_sd.keys()
 
-sd = kron_it_2(gpt, conf)
+print("Decompositio hao")
+kron_decomp = kron_it_2(gpt2_sd, conf_decomp)
 
+if True:
+	i = 5
+	c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
+
+	fc_0 = f"transformer.h.{i}.mlp.c_fc_0"
+	fc_1 = f"transformer.h.{i}.mlp.c_fc_1"
+	proj_0 = f"transformer.h.{i}.mlp.c_proj_0"
+	proj_1 = f"transformer.h.{i}.mlp.c_proj_1"
+
+	print(kron_decomp[fc_0].shape)
+	print(kron_decomp[fc_1].shape)
+	print(kron_decomp[proj_0].shape)
+	print(kron_decomp[proj_1].shape)
+
+decomp_keys = list(kron_decomp.keys())
 transposed = ['attn.c_attn.weight', 'attn.c_proj.weight']
-#transposed = ['attn.c_attn.weight']
 
-for k in k_origin:
+for k in gpt2_keys:
 	if any(k.endswith(w) for w in transposed):
-		sd[k] = gpt[k].t()
+		kron_decomp[k] = gpt2_sd[k].t()
 
-rest = [i for i in k_krony if i not in sd.keys()]
+rest = [i for i in k_krony if i not in kron_decomp.keys()]
 
 for i in rest:
-    sd[i] = gpt[i]
+    kron_decomp[i] = gpt2_sd[i]
 
-kronyG.load_state_dict(sd) 
+#kronyG.load_state_dict(kron_decomp) 
 
-#print("3. Saving!")
-#torch.save(new, "out2/VL_768_768.pt")
+print("3. Saving!")
+torch.save(kron_decomp, "VLs/VL_256_1024_2.pt")
 
-
+"""
 ##### Testing: ##########################################################################
 
+if True:
+	i = 5
+	c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
+
+	fc_0 = f"transformer.h.{i}.mlp.c_fc_0"
+	fc_1 = f"transformer.h.{i}.mlp.c_fc_1"
+	proj_0 = f"transformer.h.{i}.mlp.c_proj_0"
+	proj_1 = f"transformer.h.{i}.mlp.c_proj_1"
+
+	print(kron_decomp[fc_0].shape)
+	print(kron_decomp[fc_1].shape)
+	print(kron_decomp[proj_0].shape)
+	print(kron_decomp[proj_1].shape)
+
+
+# test of decomposition of one Kronecker matrix:
+def quick_test(k_gpt2, ff: int):
+	# Test if the sum of factors of Kroneckers is equal to the original one.
+	A = gpt2_sd[k_gpt2]
+	ff = 1152
+	r1, r2 = kronecker_decompose(A, m=dim1, n=dim2, k=ff)
+	s = 0
+	for i in range(ff):
+		s+= torch.kron(r1[i], r2[i])
+	print(r1.shape, r2.shape)
+	return s, A
+	
 if True:
 	config0 = dict(
 		n_layer=12, 
@@ -199,8 +245,7 @@ if True:
 
 	batch_size = 12
 	block_size = 1024
-	device = "cuda"
-	##
+
 	path = 'data/openwebtext/'
 	train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
 	val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
@@ -213,12 +258,12 @@ if True:
 
 x, y = get_batch("train")
 
+print("loading gpt normy, karpathy versions")
 gpt0 = GPT(conf)
 gpt0 = gpt0.from_pretrained("gpt2")
 sd0  = gpt0.state_dict()
 gpt0.to(device)
 kronyG.to(device)
-
 
 r0 = gpt0(x)
 r2 = kronyG(x)
@@ -228,45 +273,6 @@ for i in range(12):
     print(f"{r0[0][i][0,:10]}")
     print(f"{r2[0][i][0,:10]}")
 
-
-
-
-"""
-nms = list(sd.keys())
-one_block = nms[2:14]
-
-k, kk = nms[-1], sd[nms[-1]].numel()
-print(f"Snitch > {k}")
-
-total = sum(j.numel() for i,j in sd.items()) - kk
-print(f"Total number of ds:  {total:_}")
-
-print(f"details of one block:")
-
-b1 = 0
-inms = []
-for i in nms:
-	if "mlp.c_proj.weight"  in i or "mlp.c_fc.weight" in i:
-		inms.append(i)
-		_ = sd[i].numel()
-		print(i, _)
-		b1 += _
-
-print(f"for one block we got {b1:_}")
-
-def param(checkpoint, pn, layer):
-# pn is so far either {"fc", "proj"}
-		return checkpoint["model"][f"transformer.h.{layer}.mlp.c_{pn}.weight"]
-
-		To generate a checkpoint:
-
-		write a config:
-
-		config = { 
-param_1 : [dim1, dim2],
-		  ...
-			  param_N: [dim1, dim2]
-		}
 
 pass it to kronDecompose python3 kronDecompose.py --origin="ckpt1.pt" --config=config_file
 this will automatically generate a checkpoint for you. withe the tag ckpt_p
