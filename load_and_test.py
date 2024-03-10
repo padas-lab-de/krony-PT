@@ -12,15 +12,16 @@ if True:
         vocab_size = 50257,
         block_size = 1024,
         bias = True,
-        dim_1 = 768	,
-        dim_2 = 768 
+        dim_1 = 768,
+        dim_2 = 768,
+        factors = 1 
     )
 
-    batch_size = 12
-    block_size = config_args["block_size"]
-    device = "cuda"
+    batch_size  = 12
+    block_size  = config_args["block_size"]
+    device      = "cuda"
     device_type = "cuda"
-    eval_iters = 400 
+    eval_iters  = 400 
 
     path = 'data/openwebtext/'
     train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
@@ -50,30 +51,40 @@ if True:
 
 
 sd_krony =  torch.load(f"./imp-checks/gold_gold_4_32_iteration_1350.pt")
-krony_conf = KronyGPTConfig(**config_args)
 
-
-
+"""
 k = list(sd_krony.keys())
 k1, k2 = k[0], k[-1]
-
 from transformers import GPT2LMHeadModel, GPT2Config
 gpt2 = GPT2LMHeadModel.from_pretrained("gpt2")
 sd2 = gpt2.state_dict()
-
-
-
 sd_krony[k1] = sd2[k1]
 sd_krony[k2] = sd2[k2]
-
-
 torch.save(sd_krony, "./imp-checks/1350-fresh-emb.pt")
+"""
 
-
-
-
+krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
-krony.load_state_dict(sd_krony)
-krony.to(device)
-print("we loss on this b")
-print(estimate_loss(krony))
+sd   = krony.state_dict()
+keys = sd.keys() 
+
+#krony.load_state_dict(sd_krony)
+#krony.to(device)
+#print("we loss on this b")
+#print(estimate_loss(krony))
+
+wow = {}
+for i,j in sd_krony.items():
+    if i not in keys:
+        x = i[:-3]+i[-1]
+        j = j.t().unsqueeze(0)
+        wow[x] = j
+
+
+for i in keys:
+    if i not in wow.keys():
+        wow[i] = sd_krony[i]
+        
+        
+        
+        
