@@ -50,7 +50,24 @@ if True:
         return out
 
 
-sd_krony =  torch.load(f"./imp-checks/gold_gold_4_32_iteration_1350.pt")
+
+
+sd_krony =  torch.load(f"./OG-checks/4000.pt")
+
+krony_conf = KronyGPTConfig(**config_args)
+krony = KronyGPT(krony_conf)
+sd   = krony.state_dict()
+keys = sd.keys() 
+
+krony.load_state_dict(sd_krony)
+krony.to(device)
+
+print("We loss on this b")
+print(estimate_loss(krony))
+
+
+
+
 
 """
 k = list(sd_krony.keys())
@@ -61,17 +78,7 @@ sd2 = gpt2.state_dict()
 sd_krony[k1] = sd2[k1]
 sd_krony[k2] = sd2[k2]
 torch.save(sd_krony, "./imp-checks/1350-fresh-emb.pt")
-"""
 
-krony_conf = KronyGPTConfig(**config_args)
-krony = KronyGPT(krony_conf)
-sd   = krony.state_dict()
-keys = sd.keys() 
-
-#krony.load_state_dict(sd_krony)
-#krony.to(device)
-#print("we loss on this b")
-#print(estimate_loss(krony))
 
 wow = {}
 for i,j in sd_krony.items():
@@ -85,6 +92,5 @@ for i in keys:
     if i not in wow.keys():
         wow[i] = sd_krony[i]
         
-        
-        
-        
+torch.save(wow, "OG-checks/4000.pt")        
+"""

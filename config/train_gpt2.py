@@ -4,7 +4,7 @@
 max_iters = 5
 
 eval_interval = 1    # sending to wandb. 
-eval_iters = 300      # number of batches to consider in estimate_loss()
+eval_iters = 400      # number of batches to consider in estimate_loss()
 
 log_interval = 100    # mfu thingy
 block_size = 1024
@@ -31,9 +31,9 @@ wandb_run_name= "VL_256_1024_2"
 #dim2 = 3072
 #factors = 1 
 
-#dim1 = 256
-#dim2 = 1024 
-#factors = 2
+dim1 =  768
+dim2 = 768
+factors = 1
 
 init_from = "prune"
-init_name = "imp-checks/gold_gold_4_32_iteration_1350.pt"
+init_name = "OG-checks/1350.pt"
