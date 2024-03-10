@@ -301,7 +301,7 @@ while iter_num < cut_the_run:
 		if losses["val"] < bench:
 			bench = losses["val"]
 			print(f"Saving the checkpoint at iteration {iter_num}! for {bench}")
-			torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
+			#torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	if iter_num == 0 and eval_only:
 		break
@@ -336,7 +336,7 @@ while iter_num < cut_the_run:
 
 	if iter_num % 9999 == 0 and master_process:
 		print(f"Saving the checkpoint at iteration {iter_num}!")
-		torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
+		#torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	iter_num += 1
 	local_iter_num += 1

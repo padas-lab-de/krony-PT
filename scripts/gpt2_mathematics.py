@@ -56,4 +56,4 @@ s11 = sum(sd[i].numel() for i in k11)
 s12 = sum(sd[i].numel() for i in k12)
 
 
-c = lambda fac,m: s2 + s12 + 12*2*fac*m
+c = lambda fac,m: f"{s2 + s12 + 12*2*fac*m:_}"
