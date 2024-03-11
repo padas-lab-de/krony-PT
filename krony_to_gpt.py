@@ -14,7 +14,8 @@ if True:
         block_size = 1024,
         bias = True,
         dim_1 = 768,
-        dim_2 = 768
+        dim_2 = 768, 
+        factors = 1
     )
 
     batch_size = 12
@@ -48,7 +49,8 @@ if True:
             out[split] = losses.mean()
         model.train()
         return out
-
+    
+    # gpt2 basic config
     config0 = dict(
         n_layer=12, 
         n_head=12, 
@@ -60,12 +62,11 @@ if True:
 
 
 check_f = [
-            "./imp-checks/gold_gold_4_32_iteration_4000.pt",
-            "./imp-checks/gold_gold_4_32_iteration_1350.pt",
-]
+            "./OG-checks/4000.pt",
+            "./OG-checks/1350.pt",
+        ]
 
 sd_krony =  torch.load(check_f[0])
-
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
 krony.load_state_dict(sd_krony)    
@@ -75,7 +76,6 @@ conf = GPTConfig(**config0)
 gpt  = GPT(conf)
 sd1  = gpt.state_dict()
 k1   = sd1.keys()
-
 
 # I am loading the old format of kronyPT, namely without the bias. Hence, I have to fill.
 sd_k = sd_krony.keys()
@@ -100,17 +100,84 @@ def kron_to_gpt(state_d):
 
     # kroneckers
     for i in l_weight:
-        f0 = i[:-7]+"_0_0"
-        f1 = i[:-7]+"_0_1"
-        m0 = state_d[f0]
-        m1 = state_d[f1]
-        wow[i] = torch.kron(m0,m1)
+        f0 = i[:-7]+"_0"
+        f1 = i[:-7]+"_1"
+        if "c_fc" in f0:
+            m0 = state_d[f0].contiguous()
+            m1 = state_d[f1].contiguous()
+        else:
+            m0 = state_d[f0]
+            m1 = state_d[f1]
+        s  = torch.kron(m0[0],m1[0])
+        for f in range(1, config_args["factors"]):
+            s  += torch.kron(m0[f],m1[f])
+        wow[i] =  s.t()
     return wow
 
+
+wow = kron_to_gpt(sd_krony)
+gpt.load_state_dict(wow)
+
+print("done - Good luck!")
+x, y = get_batch("train")
+
+krony.to(device)
+gpt.to(device)
+
+r = krony(x)
+r1 = gpt(x)
+
+
+"""
+for i in l_weight[:2]:
+    f0 = i[:-7]+"_0"
+    f1 = i[:-7]+"_1"
+
+    if "c_fc" in f0:
+        m0 = sd_krony[f0].contiguous()
+        m1 = sd_krony[f1].contiguous()
+    else:
+        m0 = sd_krony[f0]
+        m1 = sd_krony[f1]
+
+    s  = torch.kron(m0[0],m1[0])
+    print(sd_krony[f0].shape)
+    print(sd_krony[f1].shape)
+    print(s.shape)
+    print(sd1[i].shape)
+
+for i in l_weight:
+    f0 = i[:-7]+"_0"
+    f1 = i[:-7]+"_1"
+    if "c_fc" in f0:
+        m0 = state_d[f0].contiguous()
+        m1 = state_d[f1].contiguous()
+    else:
+        m0 = state_d[f0]
+        m1 = state_d[f1]
+    s  = torch.kron(m0[0],m1[0])
+    for f in range(config_args["factors"]):
+        s  += torch.kron(m0[f],m1[f])
+    wow[i] =  s
+
+i = "transformer.h.0.mlp.c_proj.weight"
+f0 = i[:-7]+"_0"
+f1 = i[:-7]+"_1"
+m0 = sd_krony[f0].contiguous()
+m1 = sd_krony[f1].contiguous()
+s  = torch.kron(m0[0],m1[0])
+for f in range(config_args["factors"]):
+    s  += torch.kron(m0[f],m1[f])
+
+
+############################################################################################################
+
+"""
 
 def hf_gpt_sd(sdd, gpt_keys):
     wow1 = {}
     transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
+    #transposed = ['attn.c_attn.weight', 'attn.c_proj.weight' ]
     k1 = [i for i in gpt_keys if any(i.endswith(hh) for hh in transposed)] 
     k2 = [i for i in gpt_keys if  not any(i.endswith(hh) for hh in transposed)] 
 
@@ -120,49 +187,32 @@ def hf_gpt_sd(sdd, gpt_keys):
         wow1[i] = sdd[i]
     return wow1
 
-
-
-
 from transformers import GPT2LMHeadModel, GPT2Config
 model  = GPT2LMHeadModel.from_pretrained("gpt2")
 gpt2_keys    = model.state_dict().keys()
 
-wow = kron_to_gpt(sd_krony)
 w = hf_gpt_sd(wow, gpt2_keys)
-
-gpt.load_state_dict(wow)
 model.load_state_dict(w)
-model.save_pretrained('./models/4000')
 
-print("done - Good luck!")
+model.to(device)
 
-"""
-x, y = get_batch("train")
-
-#model.to(device)
-krony.to(device)
-gpt.to(device)
-
-#r2 = model(x)
-r = krony(x)
-r1 = gpt(x)
+r2 = model(x)
 
 for i in range(5):
     print("\n>> Batch > \n")
     print(f"{r[0][i][0,:10]}")
     print(f"{r1[0][i][0,:10]}")
-#    print(f"{r2[0][i][-1][:10]}")
+    print(f"{r2[0][i][-1][:10]}")
+
+"""
 
 # step 2: From  Anrej GPT sd   TO    HF GPT
 # load the models to gpu first
-
-krony.to(device)
-print(f"Computing the loss over {eval_iters} batches of 12")
-print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
-
-print(f"Computing the loss over {eval_iters} batches of 12")
-print(f"Loss for krony with zeros bias >>  {estimate_loss(gpt)}")
-
+#model = None
+#print(f"Computing the loss over {eval_iters} batches of 12")
+#print(f"Loss for krony with zeros bias >>  {estimate_loss(krony)}")
+#print(f"Computing the loss over {eval_iters} batches of 12")
+#print(f"Loss for krony with zeros bias >>  {estimate_loss(gpt)}")
 
 ############################################################################
 

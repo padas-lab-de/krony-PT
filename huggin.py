@@ -3,7 +3,7 @@ from model import *
 import numpy as np
 from model_origin import *
 
-import lm_eval
+#import lm_eval
 import torch
 
 #config = GPT2Config.from_pretrained("gpt2")

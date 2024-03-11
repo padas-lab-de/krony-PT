@@ -12,6 +12,8 @@ Report writing:
 
 Coding:
 
+* Make the Prune / Run for 100k
+* Seems to be an issue with `.t()`, must use `.contiguous()` 
 * Revert the 1250/4000 to H-F
 * Run a training for 10 steps only, with very high batch size. 
 
