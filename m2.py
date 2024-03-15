@@ -93,16 +93,20 @@ class KronyMLP(nn.Module):
         self.c_proj_0 = nn.Parameter(torch.normal(0, 0.02, size = [self.factors, self.dim2, self.dim1]))
         self.c_proj_1 = nn.Parameter(torch.normal(0, 0.02, size = [self.factors, 3072//self.dim2, 768//self.dim1]))
 
-# addition
-#			self.r1 = 1
-#			self.rank = 4 # should be between 0 and 12
-#			self.d1 = config.d1
-#			self.d2 = config.d2
-#			self.c_fc2_0   = nn.Parameter(torch.normal(0, 0.02, size = [1, self.d1, self.d2]))
-#			self.c_fc2_1   = nn.Parameter(torch.normal(0, 0.02, size = [1, 768//self.d1, 3072//self.d2]))
-#			self.c_proj2_0 = nn.Parameter(torch.normal(0, 0.02, size = [1, self.d2, self.d1]))
-#			self.c_proj2_1 = nn.Parameter(torch.normal(0, 0.02, size = [1, 3072//self.d2, 768//self.d1]))
-# addition
+        # new addition
+        #self.r1 = 1
+        #self.d1 = config.d1
+        #self.d2 = config.d2
+        #self.c_fc2_0   = nn.Parameter(torch.normal(0, 0.02, size = [1, self.d1, self.d2]))
+        #self.c_fc2_1   = nn.Parameter(torch.normal(0, 0.02, size = [1, 768//self.d1, 3072//self.d2]))
+        #self.c_proj2_0 = nn.Parameter(torch.normal(0, 0.02, size = [1, self.d2, self.d1]))
+        #self.c_proj2_1 = nn.Parameter(torch.normal(0, 0.02, size = [1, 3072//self.d2, 768//self.d1]))
+
+        self.c_fc2_0   = nn.Parameter(torch.normal(0, 0.02, size = [1, 96, 24]))
+        self.c_fc2_1   = nn.Parameter(torch.normal(0, 0.02, size = [1, 8, 128]))
+        self.c_proj2_0 = nn.Parameter(torch.normal(0, 0.02, size = [1, 24, 96]))
+        self.c_proj2_1 = nn.Parameter(torch.normal(0, 0.02, size = [1, 128, 8]))
+        # new addition
 
         self.c_fc_bias    = nn.Parameter(torch.zeros(3072))
         self.c_proj_bias  = nn.Parameter(torch.zeros(768))
@@ -113,7 +117,9 @@ class KronyMLP(nn.Module):
     def forward(self, x):
         s_cfc =  torch.kron(self.c_fc_0[0], self.c_fc_1[0])
         for f in range(1, self.factors):
-            s_cfc += torch.kron(self.c_fc_0[f], self.c_fc_1[f])
+            s_cfc += torch.kron(self.c_fc_0[f], self.c_fc_1[f])  
+
+        s_cfc += torch.kron(self.c_fc2_0[0], self.c_fc2_1[0])  # adding the new model.
 
         x = x @ s_cfc + self.c_fc_bias
         x = self.gelu(x)
@@ -122,6 +128,8 @@ class KronyMLP(nn.Module):
         for f in range(1, self.factors):
             s_cproj += torch.kron(self.c_proj_0[f], self.c_proj_1[f])
         
+        s_cproj += torch.kron(self.c_proj2_0[0], self.c_proj2_1[0])
+
         x = x @ s_cproj  + self.c_proj_bias
         x = self.dropout(x)
         return x

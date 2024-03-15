@@ -110,7 +110,7 @@ ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 
-torch.manual_seed(1009 + seed_offset)
+torch.manual_seed(19 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
@@ -280,7 +280,7 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-bench = 3.12
+bench = 3.5
 while iter_num < cut_the_run:
 # determine and set the learning rate for this iteration
 	lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -301,7 +301,7 @@ while iter_num < cut_the_run:
 		if losses["val"] < bench:
 			bench = losses["val"]
 			print(f"Saving the checkpoint at iteration {iter_num}! for {bench}")
-			#torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
+			torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	if iter_num == 0 and eval_only:
 		break
@@ -312,17 +312,14 @@ while iter_num < cut_the_run:
 		with ctx:
 			logits, loss = model(X, Y)
 			loss = loss / gradient_accumulation_steps 
-			# scale the loss to account for gradient accumulation
 		
 		# immediately async prefetch next batch while model is 
-		# doing the forward pass on the GPU >> investigate this in detail, how does it happen.
-		# new batch
 		X, Y = get_batch('train')
-		# backward pass, with gradient scaling if training in fp16
+		# doing the forward pass on the GPU >> investigate this in detail, how does it happen.
 		scaler.scale(loss).backward()
 
-	if iter_num % 21 == 0:
-		print(f">>> Iter {iter_num} Loss {loss*gradient_accumulation_steps}")
+	#if iter_num % 21 == 0:
+	#	print(f">>> Iter {iter_num} Loss {loss*gradient_accumulation_steps}")
 
 	if grad_clip != 0.0:
 		scaler.unscale_(optimizer)
@@ -334,8 +331,8 @@ while iter_num < cut_the_run:
 		
 	#print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
 
-	if iter_num % 9999 == 0 and master_process:
-		print(f"Saving the checkpoint at iteration {iter_num}!")
+	#if iter_num % 9999 == 0 and master_process:
+		#print(f"Saving the checkpoint at iteration {iter_num}!")
 		#torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
 
 	iter_num += 1

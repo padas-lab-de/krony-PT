@@ -1,81 +1,60 @@
-# Plug and Play // Most used scripts.
 
-## Loading a gpt model > torch format
+sd = {}
+
+lay = lambda layer : [i for i in sd.keys() if i.startswith(f"transformer.h.{layer}")]
+lay_w = lambda layer : [i for i in sd.keys() if i.startswith(f"transformer.h.{layer}") and  any([i.endswith("_1"),i.endswith("_0")])]
 
 
+# for the struct 96, 24
+# Quickly instantiate a model:
 
-## Loading a kronyPT model. and eval:
-import numpy 
-from model import 
-config_args = dict(
-    n_layer=12, 
-    n_head=12, 
-    n_embd=768,
-    vocab_size = 50257,
-    block_size = 1024,
-    bias = True,
-    dim_1 = 3072,
-    dim_2 = 384
-)
-
-batch_size = 12
-block_size = config_args["block_size"]
-device = "cuda"
-device_type = "cuda"
-eval_iters = 200 
-
-path = 'data/openwebtext/'
-train_data = np.memmap(f'{path}train.bin', dtype=np.uint16, mode='r')
-val_data = np.memmap(f'{path}val.bin', dtype=np.uint16, mode='r')
-def get_batch(split):
-    data = train_data if split == 'train' else val_data
-    ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
-    y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
-    return x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(device, non_blocking=True)
-
-ctx =  torch.amp.autocast(device_type=device_type, dtype=torch.bfloat16)
-@torch.no_grad()
-def estimate_loss(model):
-    out = {}
-    model.eval()
-    for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
-        for k in range(eval_iters):
-            X, Y = get_batch(split)
-            with ctx:
-                logits, loss = model(X, Y)
-            losses[k] = loss.item()
-        out[split] = losses.mean()
-    model.train()
-    return out
-
-path = "checkpoints/gpt2-prune-new_init_1_iteration_27900.pt"
-sd_krony =  torch.load(path)
-
-for pn,p in list(sd_krony.items()):
-	if pn.startswith("module"):
-		sd_krony[pn[7:]] = sd_krony.pop(pn)
-
-# the state_dict for Krony is this sd_krony (without the bias)
+from m2 import *
+if True:
+    config_args = dict(
+        n_layer=12, 
+        n_head=12, 
+        n_embd=768,
+        vocab_size = 50257,
+        block_size = 1024,
+        bias = True,
+        dim_1 = 768,
+        dim_2 = 768, 
+        factors = 1
+    )
 
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
+keys_all = list(krony.state_dict().keys())
 
-# Loading the GPTs:
+p0 = "./OG-checks/1350.pt"
+sd0 = torch.load(p0)
 
-# gpt init
-conf = GPTConfig(**config0)
-gpt = GPT(conf)
-sd1 = gpt.state_dict()
-k1  = sd1.keys()
+keys_rest = [i for i in keys_all if i not in sd0.keys()]
 
+p1 = "./VLs/VL_94_24_1.pt"
+sd1 = torch.load(p1)
 
+for ky in keys_rest:
+    x = ky[:-3] + ky[-2:]
+    print(x)
+    sd0[ky] = sd1[x]
 
-## Loading and testing.
+keys = list(sd0.keys())
+pt1 = [i for i in keys if any([i.endswith("proj2_0"), i.endswith("fc2_0")])]
+pt2 = [i for i in keys if any([i.endswith("proj_0"), i.endswith("fc_0")])]
 
-
-
-## Eval of a local model.
-
-
+krony.load_state_dict(sd0)
+sdxx = krony.state_dict()["transformer.h.0.mlp.c_fc2_0"]
+sdyy = krony.state_dict()["transformer.h.0.mlp.c_fc_0"]
+print(sdxx, sdyy)
+for i in pt1:
+    sd0[i] = 1/4 * sd0.pop(i)
+    
+for i in pt2:
+    sd0[i] = 3/4 * sd0.pop(i)
+    
+    
+krony.load_state_dict(sd0)
+sdxx = krony.state_dict()["transformer.h.0.mlp.c_fc2_0"]
+sdyy = krony.state_dict()["transformer.h.0.mlp.c_fc_0"]
+print(sdxx, sdyy)

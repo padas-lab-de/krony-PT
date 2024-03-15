@@ -2,20 +2,30 @@ Add links:
 * Old README.md got bloated >> Link.
 * Initial report >> Link.
 
-
-
 # TODO:
+
+The new models, are *NOT* getting better. 
+* Add more weights, what can you do with 600k params
+* I suggest you add more to the first two layers.
+
+Refactor the code:
+	* Make it easier for someone else to join and play with.
+	* Remove old files.
+	* Write better documentation.
 
 Report writing:
 * Finish section on Kronecker Structure.
 * Finish section on Van Loan and Pruning.
 
 Coding:
-
 * Make the Prune / Run for 100k
 * Seems to be an issue with `.t()`, must use `.contiguous()` 
-* Revert the 1250/4000 to H-F
-* Run a training for 10 steps only, with very high batch size. 
+* Revert the 1250/4000 to H-F  ?DONE
+* Run a training for 10 steps only, with very high batch size.  ?DONE
+
+* github issue
+* score the 95M
+* prune the 95M and see what's up
 
 
 

@@ -13,7 +13,7 @@ change the **conf** dict to your liking.
 
 import torch
 from einops import rearrange
-from mmodel import *
+from model import *
 from model_origin import *
 
 # add original link to the implementation. > I'm following her on Twitter, Hailey smth.
@@ -136,9 +136,9 @@ gpt 	  = GPT2LMHeadModel.from_pretrained("gpt2")
 gpt2_sd   = gpt.state_dict()
 gpt2_keys = list(gpt2_sd.keys())
 
-dim1 = 256	 
-dim2 = 1024 
-factors = 2 
+dim1 = 96
+dim2 = 24
+factors = 1
 
 conf_decomp = {
     "dim"   : (dim1, dim2),  # the dims of A (m_1, n_1) following latex notation
@@ -194,12 +194,10 @@ rest = [i for i in k_krony if i not in kron_decomp.keys()]
 for i in rest:
     kron_decomp[i] = gpt2_sd[i]
 
-#kronyG.load_state_dict(kron_decomp) 
+kronyG.load_state_dict(kron_decomp) 
 
 print("3. Saving!")
-torch.save(kron_decomp, "VLs/VL_256_1024_2.pt")
-
-
+#torch.save(kron_decomp, "VLs/VL_94_24_1.pt")
 
 """
 ##### Testing: ##########################################################################

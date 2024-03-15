@@ -64,9 +64,11 @@ if True:
 check_f = [
             "./OG-checks/4000.pt",
             "./OG-checks/1350.pt",
-        ]
+]
 
-sd_krony =  torch.load(check_f[0])
+pot = "./check2/768_768_2_iteration_13.pt"
+
+sd_krony =  torch.load(pot)
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
 krony.load_state_dict(sd_krony)    
@@ -114,21 +116,61 @@ def kron_to_gpt(state_d):
         wow[i] =  s.t()
     return wow
 
+def hf_gpt_sd(sdd, gpt_keys):
+    wow1 = {}
+    transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
+    #transposed = ['attn.c_attn.weight', 'attn.c_proj.weight' ]
+    k1 = [i for i in gpt_keys if any(i.endswith(hh) for hh in transposed)] 
+    k2 = [i for i in gpt_keys if  not any(i.endswith(hh) for hh in transposed)] 
 
+    for i in k1:
+        wow1[i] = sdd[i].t()
+    for i in k2:
+        wow1[i] = sdd[i]
+    return wow1
+
+
+
+from transformers import GPT2LMHeadModel, GPT2Config
+model  = GPT2LMHeadModel.from_pretrained("gpt2")
+gpt2_keys    = model.state_dict().keys()
+
+
+print("Model conversion")
 wow = kron_to_gpt(sd_krony)
-gpt.load_state_dict(wow)
+w = hf_gpt_sd(wow, gpt2_keys)
+model.load_state_dict(w)
 
-print("done - Good luck!")
-x, y = get_batch("train")
 
-krony.to(device)
-gpt.to(device)
 
-r = krony(x)
-r1 = gpt(x)
+
+#gpt.load_state_dict(wow)
+
+print("Saving, Good luck!")
+model.save_pretrained("./hf/13")
+
+
+
 
 
 """
+
+x, y = get_batch("train")
+
+print("we going GPU >")
+krony.to(device)
+gpt.to(device)
+model.to(device)
+r = krony(x)
+r1 = gpt(x)
+r2 = model(x)
+
+for i in range(5):
+    print("\n>> Batch > \n")
+    print(f"{r[0][i][0,:10]}")
+    print(f"{r1[0][i][0,:10]}")
+    print(f"{r2[0][i][-1][:10]}")
+
 for i in l_weight[:2]:
     f0 = i[:-7]+"_0"
     f1 = i[:-7]+"_1"
@@ -174,36 +216,6 @@ for f in range(config_args["factors"]):
 
 """
 
-def hf_gpt_sd(sdd, gpt_keys):
-    wow1 = {}
-    transposed = ['attn.c_attn.weight', 'attn.c_proj.weight', 'mlp.c_fc.weight', 'mlp.c_proj.weight']
-    #transposed = ['attn.c_attn.weight', 'attn.c_proj.weight' ]
-    k1 = [i for i in gpt_keys if any(i.endswith(hh) for hh in transposed)] 
-    k2 = [i for i in gpt_keys if  not any(i.endswith(hh) for hh in transposed)] 
-
-    for i in k1:
-        wow1[i] = sdd[i].t()
-    for i in k2:
-        wow1[i] = sdd[i]
-    return wow1
-
-from transformers import GPT2LMHeadModel, GPT2Config
-model  = GPT2LMHeadModel.from_pretrained("gpt2")
-gpt2_keys    = model.state_dict().keys()
-
-w = hf_gpt_sd(wow, gpt2_keys)
-model.load_state_dict(w)
-
-model.to(device)
-
-r2 = model(x)
-
-for i in range(5):
-    print("\n>> Batch > \n")
-    print(f"{r[0][i][0,:10]}")
-    print(f"{r1[0][i][0,:10]}")
-    print(f"{r2[0][i][-1][:10]}")
-
 """
 
 # step 2: From  Anrej GPT sd   TO    HF GPT
@@ -225,5 +237,11 @@ for i in int_sd.keys():
     if i not in sd_krony.keys():
         x = int_sd[i].shape
         tintin[i] = torch.zeros(x)
- 
+ = 0
+    ...: for i in set(sd.keys()):
+    ...:     if i.endswith("_0") or i.endswith("_1"):
+    ...:         k = i[:-3]+i[-1]
+    ...:         sd[k] = sd.pop(i).unsqueeze(0)
+    ...:         #print(i,k)
+    ...:     #sd[i[7:]] = sd.pop(i)
 """

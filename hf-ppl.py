@@ -7,11 +7,8 @@ from model_origin import *
 
 import numpy as np  
 
-
-
-
 device = "cuda"
-model  = GPT2LMHeadModel.from_pretrained("./models/4000").to(device)
+model  = GPT2LMHeadModel.from_pretrained("./hf/13").to(device)
 tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
 
 wiki = ['wikitext-103-v1', 'wikitext-2-v1']
@@ -22,8 +19,7 @@ def test_this(dataset, model):
         test = load_dataset("wikitext", wiki[1], split="test")
     elif dataset == "lambada":
         test = load_dataset("lambada", split="test")
-        
-    #test = load_dataset("lambada", split="test")
+
     encodings = tokenizer("\n\n".join(test["text"]), return_tensors="pt")
 
     max_length = model.config.n_positions
