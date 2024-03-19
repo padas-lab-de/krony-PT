@@ -110,7 +110,7 @@ ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 
-torch.manual_seed(19 + seed_offset)
+torch.manual_seed(32 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
@@ -280,7 +280,7 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-bench = 3.5
+bench = 3.7
 while iter_num < cut_the_run:
 # determine and set the learning rate for this iteration
 	lr = get_lr(iter_num) if decay_lr else learning_rate

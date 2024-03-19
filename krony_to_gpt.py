@@ -13,13 +13,14 @@ if True:
         vocab_size = 50257,
         block_size = 1024,
         bias = True,
-        dim_1 = 768,
-        dim_2 = 768, 
+        dim_1 = 384,
+        dim_2 = 3072, 
         factors = 1
     )
 
     batch_size = 12
     block_size = config_args["block_size"]
+
     device = "cuda"
     device_type = "cuda"
     eval_iters = 200 
@@ -61,12 +62,12 @@ if True:
     )
 
 
-check_f = [
+OGs = [
             "./OG-checks/4000.pt",
             "./OG-checks/1350.pt",
 ]
 
-pot = "./check2/768_768_2_iteration_13.pt"
+pot = "./check2/95M_tuning_iteration_17400.pt"
 
 sd_krony =  torch.load(pot)
 krony_conf = KronyGPTConfig(**config_args)
@@ -147,7 +148,7 @@ model.load_state_dict(w)
 #gpt.load_state_dict(wow)
 
 print("Saving, Good luck!")
-model.save_pretrained("./hf/13")
+model.save_pretrained("./hf/95M-3")
 
 
 

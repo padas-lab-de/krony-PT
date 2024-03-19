@@ -136,6 +136,8 @@ gpt 	  = GPT2LMHeadModel.from_pretrained("gpt2")
 gpt2_sd   = gpt.state_dict()
 gpt2_keys = list(gpt2_sd.keys())
 
+
+
 dim1 = 96
 dim2 = 24
 factors = 1
@@ -167,21 +169,6 @@ k_krony    = krony_sd.keys()
 print("Decompositio hao")
 kron_decomp = kron_it_2(gpt2_sd, conf_decomp)
 
-if True:
-	i = 5
-	c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
-	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
-
-	fc_0 = f"transformer.h.{i}.mlp.c_fc_0"
-	fc_1 = f"transformer.h.{i}.mlp.c_fc_1"
-	proj_0 = f"transformer.h.{i}.mlp.c_proj_0"
-	proj_1 = f"transformer.h.{i}.mlp.c_proj_1"
-
-	print(kron_decomp[fc_0].shape)
-	print(kron_decomp[fc_1].shape)
-	print(kron_decomp[proj_0].shape)
-	print(kron_decomp[proj_1].shape)
-
 decomp_keys = list(kron_decomp.keys())
 transposed = ['attn.c_attn.weight', 'attn.c_proj.weight']
 
@@ -200,6 +187,24 @@ print("3. Saving!")
 #torch.save(kron_decomp, "VLs/VL_94_24_1.pt")
 
 """
+## Mainly for debug. / please do not delete this:
+
+
+if True:
+	i = 5
+	c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
+
+	fc_0 = f"transformer.h.{i}.mlp.c_fc_0"
+	fc_1 = f"transformer.h.{i}.mlp.c_fc_1"
+	proj_0 = f"transformer.h.{i}.mlp.c_proj_0"
+	proj_1 = f"transformer.h.{i}.mlp.c_proj_1"
+
+	print(kron_decomp[fc_0].shape)
+	print(kron_decomp[fc_1].shape)
+	print(kron_decomp[proj_0].shape)
+	print(kron_decomp[proj_1].shape)
+
 ##### Testing: ##########################################################################
 
 if True:

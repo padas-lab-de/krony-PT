@@ -5,10 +5,16 @@ from tqdm import tqdm
 from model import *
 from model_origin import *
 
+
+import sys
 import numpy as np  
 
 device = "cuda"
-model  = GPT2LMHeadModel.from_pretrained("./hf/13").to(device)
+
+model_dir = sys.argv[1]  # model directory, usually a number. Model usually stored in ./hf/number
+data      = sys.argv[2]  # wiki103 wiki2 lambada 1 2 3
+
+model  = GPT2LMHeadModel.from_pretrained(f"./hf/{model_dir}").to(device)
 tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
 
 wiki = ['wikitext-103-v1', 'wikitext-2-v1']
@@ -48,12 +54,7 @@ def test_this(dataset, model):
     ppl = torch.exp(torch.stack(nlls).mean())
     return ppl.item()
 
-results = {}
-for elt in ["wiki103", "wiki2", "lambada"]:
-    print(f"Computing perplexity for {elt}")
-    ppl = test_this(elt,   model)
-    results[elt] = ppl
-    print(ppl)
-    
-print(results)
+ppl = test_this(data,   model)
+print(ppl)
+
 
