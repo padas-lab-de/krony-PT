@@ -56,34 +56,53 @@ rest2 = [pn for pn in krony_sd if pn not in list(new_sd.keys())] # just making s
  
  
 xx = "transformer.h.0.mlp.c_fc.weight"
-x1 = "transformer.h.0.mlp.c_fc_0"
-x2 = "transformer.h.0.mlp.c_fc_1"
+
+x0 = "transformer.h.0.mlp.c_fc_0"
+x1 = "transformer.h.0.mlp.c_fc_1"
+y0 = "transformer.h.0.mlp.c_proj_0"
+y1 = "transformer.h.0.mlp.c_proj_1"
 
 # keep in mind:
 # fc_0 is 1 384 3072
 # proj_0  1 3072 384
 
-for i in range(2) :
+for i in range(12) :
 	print(f"For layer {i} >>")
-	c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
+
+	x0 		   = f"transformer.h.{i}.mlp.c_fc_0"
+	x1 		   = f"transformer.h.{i}.mlp.c_fc_1"
+	y0 		   = f"transformer.h.{i}.mlp.c_proj_0"
+	y1 		   = f"transformer.h.{i}.mlp.c_proj_1"
+	c_fc_key   = f"transformer.h.{i}.mlp.c_fc.weight"
 	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
 
 	fc 	 = sd2[c_fc_key]
 	proj = sd2[c_proj_key]
 
-	#fc1  = fc[0::2].unsqueeze(0)
-	#proj1= proj[:, 0::2].unsqueeze(0)
+	fc0  = fc[0::2].unsqueeze(0)
+	proj0= proj[:, 0::2].unsqueeze(0)
+	fc1   =  torch.tensor([[1],[0]]).unsqueeze(0)
+	proj1 =  torch.tensor([[1,0]]).unsqueeze(0)
+	
+	new_sd[x0] = fc0
+	new_sd[x1] = fc1 
+	new_sd[y0] = proj0 
+	new_sd[y1] = proj1 
+  
  
-	fc1  = fc[0::2]
-	proj1= proj[:, 0::2]
- 
-	fc1   =  torch.tensor([[0,1]])
-	proj1 =  torch.tensor([[0],[1]])
+rest3 = [pn for pn in krony_sd if pn not in list(new_sd.keys())] # just making sure for debugging purposes
 
-	print(fc.shape, proj.shape)
-	print(fc1.shape, proj1.shape)
-   
+torch.save(new_sd,"./VLs/95M-prune.pt")
+
+
 """
+	print(fc.shape)
+	print(fc0.shape, fc1.shape)
+	print(krony_sd[x0].shape, krony_sd[x1].shape)
+ 
+	print(proj.shape)
+	print(proj0.shape, proj1.shape)
+	print(krony_sd[y0].shape, krony_sd[y1].shape)
 	c_fc_key = f"transformer.h.{i}.mlp.c_fc.weight"
 	c_proj_key = f"transformer.h.{i}.mlp.c_proj.weight"
 

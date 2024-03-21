@@ -4,20 +4,33 @@ import numpy as np
 from model_origin import *
 from model import *
 
+import sys
+import os
+
+# use like:
+# python krony_to_gpt.py  ./path/to/check.pt  output_dir dim1 dim2 factors
+
+src  = sys.argv[1]  # should be complete ./dest/to/check.pt from where you're running the code
+dest = sys.argv[2]
+
+dim1    = int(sys.argv[3])
+dim2    = int(sys.argv[4])
+factors = int(sys.argv[5])
+
+config_args = dict(
+    n_layer=12, 
+    n_head=12, 
+    n_embd=768,
+    vocab_size = 50257,
+    block_size = 1024,
+    bias = True,
+    dim_1 = 384,
+    dim_2 = 3072, 
+    factors = 1
+)
+
 
 if True:
-    config_args = dict(
-        n_layer=12, 
-        n_head=12, 
-        n_embd=768,
-        vocab_size = 50257,
-        block_size = 1024,
-        bias = True,
-        dim_1 = 384,
-        dim_2 = 3072, 
-        factors = 1
-    )
-
     batch_size = 12
     block_size = config_args["block_size"]
 
@@ -62,14 +75,10 @@ if True:
     )
 
 
-OGs = [
-            "./OG-checks/4000.pt",
-            "./OG-checks/1350.pt",
-]
+OGs = [ "./OG-checks/4000.pt", "./OG-checks/1350.pt"]
 
-pot = "./check2/95M_tuning_iteration_17400.pt"
 
-sd_krony =  torch.load(pot)
+sd_krony =  torch.load(src)
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
 krony.load_state_dict(sd_krony)    
@@ -142,19 +151,23 @@ wow = kron_to_gpt(sd_krony)
 w = hf_gpt_sd(wow, gpt2_keys)
 model.load_state_dict(w)
 
-
-
-
-#gpt.load_state_dict(wow)
+# creating an output directory, and saving the checkpoint in it:
+out_path = "./hf/"+dest
+if not os.path.exists(out_path):
+    os.makedirs(out_path)
+    print(f"Directory '{out_path}' created.")
+else:
+    print(f"Directory '{out_path}' already exists.")
 
 print("Saving, Good luck!")
-model.save_pretrained("./hf/95M-3")
-
+model.save_pretrained(out_path)
 
 
 
 
 """
+############################################################################################################
+now idea wtf this is about, will probb delete soon:
 
 x, y = get_batch("train")
 
@@ -215,10 +228,6 @@ for f in range(config_args["factors"]):
 
 ############################################################################################################
 
-"""
-
-"""
-
 # step 2: From  Anrej GPT sd   TO    HF GPT
 # load the models to gpu first
 #model = None
@@ -227,22 +236,4 @@ for f in range(config_args["factors"]):
 #print(f"Computing the loss over {eval_iters} batches of 12")
 #print(f"Loss for krony with zeros bias >>  {estimate_loss(gpt)}")
 
-############################################################################
-
-> This block was nece. before, when I used to train models with no bias.
-
-tintin = {k: v for k, v in sd_krony.items()}
-
-int_sd = krony.state_dict()
-for i in int_sd.keys():
-    if i not in sd_krony.keys():
-        x = int_sd[i].shape
-        tintin[i] = torch.zeros(x)
- = 0
-    ...: for i in set(sd.keys()):
-    ...:     if i.endswith("_0") or i.endswith("_1"):
-    ...:         k = i[:-3]+i[-1]
-    ...:         sd[k] = sd.pop(i).unsqueeze(0)
-    ...:         #print(i,k)
-    ...:     #sd[i[7:]] = sd.pop(i)
 """

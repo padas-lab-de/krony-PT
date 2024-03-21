@@ -1,10 +1,12 @@
+# this script computes the perplexity of a gpt2-like model.
+# the model has to be in a ./hf/model
+
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 from datasets import load_dataset
 import torch
 from tqdm import tqdm
 from model import *
 from model_origin import *
-
 
 import sys
 import numpy as np  
@@ -54,7 +56,25 @@ def test_this(dataset, model):
     ppl = torch.exp(torch.stack(nlls).mean())
     return ppl.item()
 
-ppl = test_this(data,   model)
-print(ppl)
+if data == "wiki103":
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
+elif data == "wiki2":
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
+elif data == "lambada":
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
+else:
+    data = "wiki103"
+    ppl = test_this("wiki103",   model)
+    print(f"ppl on {data} is {ppl}")
+    data = "wiki2"
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
+    data = "lambada"
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
+        
 
 

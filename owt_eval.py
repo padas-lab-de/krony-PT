@@ -5,10 +5,14 @@ import numpy as np
 from model import *
 import sys
 
+# how to use:
+# python owt_eval.py ./path_to_pt_file.pt dim1 dim2 factors
+
 path_checkpoint = sys.argv[1] 
 
 dim1 = int(sys.argv[2])
 dim2 = int(sys.argv[3])
+factors = int(sys.argv[4])
 
 if True:
     config_args = dict(
@@ -20,7 +24,7 @@ if True:
         bias = True,
         dim_1 = dim1,
         dim_2 = dim2, 
-        factors = 1
+        factors = factors
     )
 
     batch_size = 12

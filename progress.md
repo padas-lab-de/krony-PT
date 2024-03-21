@@ -9,13 +9,40 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 * [Misc](#misc)
 
 ---
-### **TODO:** <a name="todo">
 
-* Try the Embedding decom after training.
-* Train 95M longer / then decompose embedding.
-* Fixed lr adaptation
+### **New TODO**
 
-* Try the other state_dict for the 95M.
+* I suggest you add more to the first two layers.
+
+Refactor the code:
+        * Make it easier for someone else to join and play with.
+        * Remove old files.
+        * Write better documentation.
+
+Report writing:
+* Finish section on Kronecker Structure.
+* Finish section on Van Loan and Pruning.
+
+Coding:
+* Make the Prune / Run for 100k
+* Seems to be an issue with `.t()`, must use `.contiguous()`
+* Revert the 1250/4000 to H-F  ?DONE
+* Run a training for 10 steps only, with very high batch size.  ?DONE
+* Make the scripts
+        * eval owt checkpoint sample-size
+        * make the path from terminal
+
+* github issue
+        * push the report to gitlab as well
+* score the 95M
+* prune the 95M and see what's up
+
+
+
+
+
+### **Old' TODO:** <a name="todo">
+
 
 * Mixed strategy:
 	* Run all configs that could take us to 81M  [DONE]
@@ -30,7 +57,7 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 * Convert the TQCompressor, to GPT, then evaluate using lm_eval
 
 * debugg 101: DONE, woohoo. Issue fixed.
-	* run the forward fucking pass. i am sick of you
+	* run the forward fucking pass. i am s of you
 	* run the same batch through HF-GPT and KronyGPT ? 
 	* please do not give the same output.
 	* look-up table to switch between naming. GPT / Krony / GPT-HF
@@ -96,34 +123,13 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 	* Log results.
 	* Add **ddp** to code for 1 by 1 training (`train_distillation.py`). (this is done for train.py, so it should be am easy copy paste, approx 2 hours of work)
 
-* Get a 3 decompositions, target point is **85M** (same or under DistilGPT)
-	* Decomposition 1 > 95M from $(3072, 768)$ to $(3072, 384)$  [DONE]
-
-* In the distillation, have a quick/efficient way of:
-	* Parameters loading.
-	* Right now, I'm setting params manually
-	* this should be done auto, be a professional! it's better for long term dev.
 
 * Optimize compute [No use for it now, gpu are doing their job as of now.] 
 	* Still haven't used any KP props. But I doubt that it would help [compute is not the bottleneck here].
 
-* More Experiments.
+* More ExpVjjeriments.
 	* different n / m for KroneckerDecom
 	* Try the Kronecker decomposition using the lib.
-
-* Add a quick script on how to generate a new checkpoint from scratch. 
-
----
-*  Questions:
-	* Freezing the weights apparently helps, is there a way to quantify the impact?
-	* How the KP factors are changing with and without freezing of other weights?
-	* Some metric applied on the grads? 
-
-* **Experiments that needs to be done:** >> Please check the latex document. Sec X.X (I'll make this public soon)
-
-* How can you monitor what is your network learning?
-	* We need some logging of the gradient / activation maps (I think they're called attention maps, not to be confused with attention blocks of the transformer).
-	* Start with this [blog by Karpathy](http://karpathy.github.io/2019/04/25/recipe/)
 
 * Add this to your tex file.  Van Loan Kronecker Decomposition is actually not the closest to W:
 	* i.e., when I distill the student/teacher. the mse btw the original weights and KP weights actually gets bigger. this is kinda surprising, but it could make sense somehow.
@@ -134,6 +140,12 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 
 ### **DONE**    <a name="done">
 
+* New README.mf, keep it clean DONE
+* Add a quick script on how to generate a new checkpoint from scratch.  DONE
+
+* Try the Embedding decom after training. DONE / not working.
+* Train 95M longer / then decompose embedding.  DONE
+
 * Prototyping on Shakespeare -- evening kinda fun. [DONE]
 	* Load everything from config script [DONE]
 	* Save some checkpoints, save them locally. [DONE]
@@ -142,6 +154,9 @@ This is a detached fork of [NanoGPT @ Karpathy](https://github.com/karpathy/nano
 * Other decompositions.
 	* Decompose [DONE]
 	* Test [DONE] 
+
+* Get a 3 decompositions, target point is **85M** (same or under DistilGPT)
+	* Decomposition 1 > 95M from $(3072, 768)$ to $(3072, 384)$  [DONE]
 
 * Debug distil: [DONE]
 	* normalize the losses 

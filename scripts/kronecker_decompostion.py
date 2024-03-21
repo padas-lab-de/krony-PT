@@ -138,9 +138,9 @@ gpt2_keys = list(gpt2_sd.keys())
 
 
 
-dim1 = 96
-dim2 = 24
-factors = 1
+dim1 = 256
+dim2 = 64
+factors = 10
 
 conf_decomp = {
     "dim"   : (dim1, dim2),  # the dims of A (m_1, n_1) following latex notation
@@ -184,7 +184,7 @@ for i in rest:
 kronyG.load_state_dict(kron_decomp) 
 
 print("3. Saving!")
-#torch.save(kron_decomp, "VLs/VL_94_24_1.pt")
+torch.save(kron_decomp, "VLs/VL_256_64_10.pt")
 
 """
 ## Mainly for debug. / please do not delete this:

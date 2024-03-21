@@ -1,6 +1,4 @@
 """
-This is a lab, literally. I test and verify correctness of code here.
-
 1. I'm checking if the Optimizer is working as I want. Seems ok.
 2. Data stuff.
 
