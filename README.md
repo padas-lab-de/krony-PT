@@ -1,6 +1,7 @@
 ## How to play: (not completed)
 1. Clone the directory.
-2. Create the data: (should take sometime)
+2. Create the data: check `./data/owt/prepare.py` 
+
 
 ### Train new models: 3 steps.
 
@@ -34,9 +35,11 @@ This would convert you `KronyPT` model to a suitable GPt-like format stored at `
 2. Test the perplexity for `wikitext` and `lambada`:
 
 ```
-$python perplexity.py output_dir wiki103
+$ python perplexity.py output_dir wiki103
+$ python perplexity.py output_dir 			# to evaluate on all 3 datasets
+
 ```
-You have 4 options: `wiki103`, `wiki1`, `lambada` and `all`.The option `all` would return the perplexity for all datasets.
+You have 4 options: `wiki103`, `wiki1`, `lambada`. The option `all` would return the perplexity for all datasets.
 
 
 

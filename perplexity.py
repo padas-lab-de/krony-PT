@@ -14,7 +14,9 @@ import numpy as np
 device = "cuda"
 
 model_dir = sys.argv[1]  # model directory, usually a number. Model usually stored in ./hf/number
-data      = sys.argv[2]  # wiki103 wiki2 lambada 1 2 3
+data = ""
+if len(sys.argv) > 2:
+    data = sys.argv[2]  # wiki103 wiki2 lambada 1 2 3
 
 model  = GPT2LMHeadModel.from_pretrained(f"./hf/{model_dir}").to(device)
 tokenizer = GPT2TokenizerFast.from_pretrained("gpt2")
@@ -56,16 +58,7 @@ def test_this(dataset, model):
     ppl = torch.exp(torch.stack(nlls).mean())
     return ppl.item()
 
-if data == "wiki103":
-    ppl = test_this(data,   model)
-    print(f"ppl on {data} is {ppl}")
-elif data == "wiki2":
-    ppl = test_this(data,   model)
-    print(f"ppl on {data} is {ppl}")
-elif data == "lambada":
-    ppl = test_this(data,   model)
-    print(f"ppl on {data} is {ppl}")
-else:
+if data == "":
     data = "wiki103"
     ppl = test_this("wiki103",   model)
     print(f"ppl on {data} is {ppl}")
@@ -75,6 +68,14 @@ else:
     data = "lambada"
     ppl = test_this(data,   model)
     print(f"ppl on {data} is {ppl}")
-        
+elif data == "wiki103":
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
+elif data == "wiki2":
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
+elif data == "lambada":
+    ppl = test_this(data,   model)
+    print(f"ppl on {data} is {ppl}")
 
 

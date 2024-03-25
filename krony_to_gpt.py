@@ -13,9 +13,9 @@ import os
 src  = sys.argv[1]  # should be complete ./dest/to/check.pt from where you're running the code
 dest = sys.argv[2]
 
-dim1    = int(sys.argv[3])
-dim2    = int(sys.argv[4])
-factors = int(sys.argv[5])
+dim1 = int(sys.argv[3])
+dim2 = int(sys.argv[4])
+facs = int(sys.argv[5])
 
 config_args = dict(
     n_layer=12, 
@@ -24,9 +24,9 @@ config_args = dict(
     vocab_size = 50257,
     block_size = 1024,
     bias = True,
-    dim_1 = 384,
-    dim_2 = 3072, 
-    factors = 1
+    dim_1 = dim1,
+    dim_2 = dim2, 
+    factors = facs
 )
 
 
