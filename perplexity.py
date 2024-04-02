@@ -1,5 +1,6 @@
 # this script computes the perplexity of a gpt2-like model.
 # the model has to be in a ./hf/model
+# use:  $ python perplexity.py model 
 
 from transformers import GPT2LMHeadModel, GPT2TokenizerFast
 from datasets import load_dataset

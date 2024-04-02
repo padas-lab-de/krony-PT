@@ -7,15 +7,20 @@ from model import *
 import sys
 import os
 
-# use like:
-# python krony_to_gpt.py  ./path/to/check.pt  output_dir dim1 dim2 factors
+"""
+$ python krony_to_gpt.py  ./path/to/check.pt  output_dir
+# this will create a HF model at ./hf/output_dir
+"""
 
 src  = sys.argv[1]  # should be complete ./dest/to/check.pt from where you're running the code
 dest = sys.argv[2]
 
-dim1 = int(sys.argv[3])
-dim2 = int(sys.argv[4])
-facs = int(sys.argv[5])
+sd_krony =  torch.load(src)
+# infering the dims from the shape of the c_proj of the first layer.
+c_proj = sd_krony["transformer.h.0.mlp.c_proj_0"].shape
+dim1    = c_proj[2] 
+dim2    = c_proj[1] 
+facs = c_proj[0] 
 
 config_args = dict(
     n_layer=12, 
@@ -77,8 +82,6 @@ if True:
 
 OGs = [ "./OG-checks/4000.pt", "./OG-checks/1350.pt"]
 
-
-sd_krony =  torch.load(src)
 krony_conf = KronyGPTConfig(**config_args)
 krony = KronyGPT(krony_conf)
 krony.load_state_dict(sd_krony)    
@@ -166,67 +169,6 @@ model.save_pretrained(out_path)
 
 
 """
-############################################################################################################
-now idea wtf this is about, will probb delete soon:
-
-x, y = get_batch("train")
-
-print("we going GPU >")
-krony.to(device)
-gpt.to(device)
-model.to(device)
-r = krony(x)
-r1 = gpt(x)
-r2 = model(x)
-
-for i in range(5):
-    print("\n>> Batch > \n")
-    print(f"{r[0][i][0,:10]}")
-    print(f"{r1[0][i][0,:10]}")
-    print(f"{r2[0][i][-1][:10]}")
-
-for i in l_weight[:2]:
-    f0 = i[:-7]+"_0"
-    f1 = i[:-7]+"_1"
-
-    if "c_fc" in f0:
-        m0 = sd_krony[f0].contiguous()
-        m1 = sd_krony[f1].contiguous()
-    else:
-        m0 = sd_krony[f0]
-        m1 = sd_krony[f1]
-
-    s  = torch.kron(m0[0],m1[0])
-    print(sd_krony[f0].shape)
-    print(sd_krony[f1].shape)
-    print(s.shape)
-    print(sd1[i].shape)
-
-for i in l_weight:
-    f0 = i[:-7]+"_0"
-    f1 = i[:-7]+"_1"
-    if "c_fc" in f0:
-        m0 = state_d[f0].contiguous()
-        m1 = state_d[f1].contiguous()
-    else:
-        m0 = state_d[f0]
-        m1 = state_d[f1]
-    s  = torch.kron(m0[0],m1[0])
-    for f in range(config_args["factors"]):
-        s  += torch.kron(m0[f],m1[f])
-    wow[i] =  s
-
-i = "transformer.h.0.mlp.c_proj.weight"
-f0 = i[:-7]+"_0"
-f1 = i[:-7]+"_1"
-m0 = sd_krony[f0].contiguous()
-m1 = sd_krony[f1].contiguous()
-s  = torch.kron(m0[0],m1[0])
-for f in range(config_args["factors"]):
-    s  += torch.kron(m0[f],m1[f])
-
-
-############################################################################################################
 
 # step 2: From  Anrej GPT sd   TO    HF GPT
 # load the models to gpu first

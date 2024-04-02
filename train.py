@@ -110,7 +110,7 @@ ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
 
-torch.manual_seed(32 + seed_offset)
+torch.manual_seed(107 + seed_offset)
 torch.backends.cuda.matmul.allow_tf32 = True # allow tf32 on matmul
 torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
 
@@ -176,22 +176,21 @@ else:
         if pn.startswith("module"):
             checkpoint[pn[7:]] = checkpoint.pop(pn)
 
-    # the checkpoints I'm saving are only weights. I might change this behavior later.
-    #checkpoint_model_args = checkpoint['model_args']
-    #for k in ['n_layer', 'n_head', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-    #    model_args[k] = checkpoint_model_args[k]
+    c_proj = checkpoint["transformer.h.0.mlp.c_proj_0"].shape
+    dim1   = c_proj[2] 
+    dim2   = c_proj[1] 
+    facs   = c_proj[0] 
 
-    # create the model
-    #model_args["dim1"] = dim1
-    #model_args["dim2"] = dim2
-    #model_args["factors"] = factors
+    model_args["dim_1"] = dim1
+    model_args["dim_2"] = dim2
+    model_args["factors"] = facs
+
     model_args['vocab_size'] = 50257
     model_args['bias'] = True
    
-    print("we here god  damn it", model_args) 
+    print("Config we using > ", model_args) 
 
     gptconf = KronyGPTConfig(**model_args)
-        
     model = KronyGPT(gptconf)
     model.load_state_dict(checkpoint)
 
@@ -280,7 +279,7 @@ local_iter_num = 0 # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model # unwrap DDP container if needed
 running_mfu = -1.0
 
-bench = 3.6
+bench = 3.12
 while iter_num < cut_the_run:
 # determine and set the learning rate for this iteration
 	lr = get_lr(iter_num) if decay_lr else learning_rate
@@ -318,8 +317,7 @@ while iter_num < cut_the_run:
 		# doing the forward pass on the GPU >> investigate this in detail, how does it happen.
 		scaler.scale(loss).backward()
 
-	#if iter_num % 21 == 0:
-	#	print(f">>> Iter {iter_num} Loss {loss*gradient_accumulation_steps}")
+	print(f">>> Iter {iter_num} Loss {loss*gradient_accumulation_steps}")
 
 	if grad_clip != 0.0:
 		scaler.unscale_(optimizer)
@@ -328,9 +326,8 @@ while iter_num < cut_the_run:
 	scaler.step(optimizer)  # step the optimizer and scaler if training in fp16
 	scaler.update()
 	optimizer.zero_grad(set_to_none=True)
-		
-	#print(f"iter {iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
-
+	
+    # systematic checkpoint-ing
 	#if iter_num % 9999 == 0 and master_process:
 		#print(f"Saving the checkpoint at iteration {iter_num}!")
 		#torch.save(model.state_dict(), f"check2/{wandb_run_name}_iteration_{iter_num}.pt")
