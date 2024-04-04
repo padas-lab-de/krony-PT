@@ -1,11 +1,5 @@
 """
-Full definition of a GPT Language Model, all of it in this single file.
-
-References:
-
-2) huggingface/transformers PyTorch implementation:
-https://github.com/huggingface/transformers/blob/main/src/transformers/models/gpt2/modeling_gpt2.py
-
+was supposed to write code for merging here... but, plans changed. also, can you please write this shxx in a diff branch next time? thanks!
 """
 
 import math

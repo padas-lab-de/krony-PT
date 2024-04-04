@@ -11,3 +11,7 @@ input.txt
 wandb/
 *.safetensors
 models/
+hf/
+pics/
+
+
