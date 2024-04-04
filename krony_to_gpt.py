@@ -34,7 +34,6 @@ config_args = dict(
     factors = facs
 )
 
-
 if True:
     batch_size = 12
     block_size = config_args["block_size"]
@@ -95,7 +94,7 @@ k1   = sd1.keys()
 # I am loading the old format of kronyPT, namely without the bias. Hence, I have to fill.
 sd_k = sd_krony.keys()
 
-l_common = [i for i in k1 if i in sd_k] #common
+l_common = [i for i in k1 if i in sd_k]
 l        = [i for i in k1 if i not in sd_k]
 l_weight = [i for i in l if i.endswith(".weight")]
 l_bias   = [i for i in l if not i.endswith(".weight")]
