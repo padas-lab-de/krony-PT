@@ -1,18 +1,27 @@
 ## ToC:
 
-* [Project](#project):
-    * [Abstract](#Abstract):
-    * [Results of 85M and 95M](#Results):
-* [How to play](#play):
-    * [Get the data](#data):
-    * [Train new models: 3 steps](#Train):
-    * [Evaluation](#Eval):
+* [Abstract](#Abstract):
+* [Results of 85M and 95M.](#Results)
+* [How to train and evaluate new models.](#play)
+    * [Get the data.](#data)
+    * [Train new models in 3 steps.](#Train)
+    * [Evaluation.](#Eval):
 
 
 ---
-## Project: <a name="project"> 
-### Abstract:<a name="Abstract"> 
-### Some early results:<a name="results"> 
+## Abstract:<a name="Abstract"> 
+
+We reduce the size of GPT2 by substituting the MLPs matrices (practically two thirds? of the model) with compressed Kronecker Products. For various reasons, we only compress the MLPs of each attention layer (change this asap). Compared to other papers:
+
+* We don't use distillation (empirical evidence shows no benefits compared to only Vanilla supervised learning).
+* We have a systematic compression scheme, i.e., compress all layers the same way. We don't see any reasons to why we would only compress odd layers (besides to force the number of parameters to be under certain threshold).
+* We use weight tying, i.e., the embedding and softmax  matrices are **identical**. This makes our model, the only "effective" 81M model.
+* We try different compression schemes (67M, 81M, and 95M)
+    * We propose a new simple initialization for the 95M model. 
+    * We use multiple factors for the VL based inits.
+
+---
+## Some results:<a name="results"> 
 ### 85M model:
 
 The only fair comparison is Vs DistilGPT:
@@ -21,8 +30,8 @@ The only fair comparison is Vs DistilGPT:
 | --- | --- | --- | --- | --- |
 | 124M      | GPT2              | 29.16        | 24.67      | 45.28      |
 | 82M       | DistilGPT2        | 44.53        | 36.48      | 76.00      |
-| 81M       | **KronyPT-81M-1350**  | 41.98        | 34.99      | -          |
-| 81M       | **KronyPT-81M-3950**  | -            | -          | 64.92      |
+| 81M       | **KronyPT-81M-1350**  | **41.98**        | **34.99**      | -          |
+| 81M       | **KronyPT-81M-3950**  | -            | -          | **64.92**      |
 
 
 Other models, with an additional output matrix:  
@@ -35,7 +44,7 @@ Other models, with an additional output matrix:
 
 ### 95M model:
 
-Here we compare, 
+Here we compare different initialization strategies: Van Loan (VL) and a (new) prunning based init.
 
 | Model       | 2 | Column 3 | Column 4 |
 |----------   |----------|----------|----------|
@@ -43,15 +52,12 @@ Here we compare,
 | 95M - prune | Row 2.2  | Row 2.3  | Row 2.4  |
 
 
-Detailed report can be found here >>
-
 ---
 ## How to play: <a name="play"> 
 ### Get the data: <a name="data"> 
 1. Clone the repository.
 2. Create the data: check `./data/owt/prepare.py` 
 > We solely use Open Web Text (owt) for training. 
-
 
 ### Train new models: 3 steps.<a name="Train"> 
 
@@ -93,5 +99,5 @@ You have 4 options: `wiki103`, `wiki1`, `lambada`. The option `all` would return
 
 ### Progress is moved to progress.md
 
-* link progress page here
-* link report above and delete this line
+* Check the file: `progress.md` 
+* Add link to report. 
