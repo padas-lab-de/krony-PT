@@ -2,10 +2,10 @@
 
 * [Abstract](#Abstract):
 * [Results of 85M and 95M.](#Results)
-* [How to train and evaluate new models.](#play)
+* [Train and Evaluate new models.](#play)
     * [Get the data.](#data)
     * [Train new models in 3 steps.](#Train)
-    * [Evaluation.](#Eval):
+    * [Evaluation.](#Eval)
 
 
 ---
@@ -22,9 +22,12 @@ We reduce the size of GPT2 by substituting the MLPs matrices (practically two th
 
 ---
 ## Some results:<a name="results"> 
+
+We train 3 classes of models, 67M (being the smallest we can get), 81M (mid size), and 95M (highest model we can get). Below are some "numbers".
+
 ### 85M model:
 
-The only fair comparison is Vs DistilGPT:
+Krony-PT (81M) outperforms DistilGPT (82M) on all benchmarks, and especilally on the Lambada dataset.
 
 | # Params  | Model            | wikitext-103 | wikitext-2 | Lambada |
 | --- | --- | --- | --- | --- |
@@ -33,18 +36,20 @@ The only fair comparison is Vs DistilGPT:
 | 81M       | **KronyPT-81M-1350**  | **41.98**        | **34.99**      | -          |
 | 81M       | **KronyPT-81M-3950**  | -            | -          | **64.92**      |
 
+Our 81M model performs on par with other Kronecker based models (x,y,z papers), while having **39M parameters** less. Even outperforming KnGPT on Lambada.
 
-Other models, with an additional output matrix:  
 
 | # Params  | Model            | wikitext-103 | wikitext-2 | Lambada |
 | --- | --- | --- | --- | --- |
-| 81M + 35M      | TQCompressedGPT2  | 40.28        | 32.25      | 64.72      |
-| 81M + 35M      | KnGPT-2 (Huawei)  | 40.97        | 32.81      | 67.62      |
+| 81M       | **KronyPT-81M-1350**  | 41.98        | 34.99      | -          |
+| 81M       | **KronyPT-81M-3950**  | -            | -          | 64.92      |
+| 119M(*)   | TQCompressedGPT2  | 40.28        | 32.25      | 64.72      |
+| 119M(*)   | KnGPT-2 (Huawei)  | 40.97        | 32.81      | 67.62      |
 
 
 ### 95M model:
 
-Here we compare different initialization strategies: Van Loan (VL) and a (new) prunning based init.
+Here we compare different initialization strategies: Van Loan (VL) and a (new) prunning based init. (add the results for the prune based method).
 
 | Model       | 2 | Column 3 | Column 4 |
 |----------   |----------|----------|----------|
